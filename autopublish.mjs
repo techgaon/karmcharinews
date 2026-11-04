@@ -142,18 +142,29 @@ function promptVideo(it) {
 async function gemini(it) {
   if (MOCK) return JSON.parse(fs.readFileSync(new URL("./mock/gemini.json", import.meta.url), "utf8"))[it.title] || { relevant: false, verified: false, reason: "mock: unknown" };
   const key = process.env.GEMINI_API_KEY; if (!key) throw new Error("GEMINI_API_KEY secret missing");
-  const body = it.video
-    ? { contents: [{ role: "user", parts: [{ file_data: { file_uri: it.link } }, { text: promptVideo(it) }] }], tools: [{ google_search: {} }], generationConfig: { temperature: 0.2, mediaResolution: "MEDIA_RESOLUTION_LOW" } }
-    : { contents: [{ role: "user", parts: [{ text: prompt(it) }] }], tools: [{ url_context: {} }, { google_search: {} }], generationConfig: { temperature: 0.2 } };
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body) });
-    if (r.status === 429 || r.status >= 500) { log("  gemini busy", r.status, "retry", attempt); await new Promise(s => setTimeout(s, 15000 * attempt)); continue; }
-    const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || "HTTP " + r.status);
+  const parts = it.video ? [{ file_data: { file_uri: it.link } }, { text: promptVideo(it) }] : [{ text: prompt(it) }];
+  // try: chosen model with web tools → same model with fewer tools → newest "latest" aliases
+  const models = [...new Set([MODEL, ...(CFG.fallbackModels || ["gemini-flash-latest", "gemini-flash-lite-latest"])])];
+  const toolSets = it.video ? [[{ google_search: {} }], []] : [[{ url_context: {} }, { google_search: {} }], [{ url_context: {} }]];
+  let lastErr = "";
+  for (const model of models) for (const tools of toolSets) {
+    const body = { contents: [{ role: "user", parts }], generationConfig: { temperature: 0.2 } };
+    if (tools.length) body.tools = tools;
+    if (it.video) body.generationConfig.mediaResolution = "MEDIA_RESOLUTION_LOW";
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      lastErr = `${model} [${tools.map(t => Object.keys(t)[0]).join("+") || "no tools"}] HTTP ${r.status}: ${(j.error?.message || "").slice(0, 220)}`;
+      log("  ", lastErr);
+      if (r.status === 429 && /retry|second/i.test(j.error?.message || "") && !/quota.*0|limit: 0/i.test(j.error?.message || "")) await new Promise(s => setTimeout(s, 20000));
+      continue;
+    }
     const raw = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
-    const m = raw.match(/\{[\s\S]*\}/); if (!m) throw new Error("no JSON in reply");
+    const m = raw.match(/\{[\s\S]*\}/); if (!m) { lastErr = model + ": no JSON in reply"; continue; }
+    if (model !== MODEL || tools.length < toolSets[0].length) log("   (used " + model + ")");
     return JSON.parse(m[0]);
   }
-  throw new Error("Gemini busy after 3 tries");
+  const e = new Error(lastErr || "Gemini failed"); e.quota = /HTTP 429/.test(lastErr); throw e;
 }
 function validate(o) {
   const V = ["panchayat", "shiksha", "revenue", "police", "health", "finance", "all"], S = ["UP", "Bihar", "MP", "Rajasthan", "Uttarakhand", "National"];
@@ -204,7 +215,7 @@ async function main() {
   log(`candidates: ${picked.length} (from ${items.length} items)`);
 
   // 3. AI → publish
-  let published = 0, skipped = 0, videos = 0;
+  let published = 0, skipped = 0, videos = 0, quotaFails = 0;
   const MAXV = CFG.maxVideosPerRun || 3;
   for (const it of picked) {
     if (published >= MAX) break;
@@ -212,7 +223,7 @@ async function main() {
     if (it.video) videos++;
     log("→", it.title.slice(0, 90));
     let o;
-    try { o = await gemini(it); } catch (e) { log("  AI error:", e.message); continue; }
+    try { o = await gemini(it); quotaFails = 0; } catch (e) { log("  AI error:", e.message); if (e.quota && ++quotaFails >= 2) { log("Gemini quota exhausted — stopping this run, will try again next run."); break; } continue; }
     const why = validate(o);
     await db.set("knSeen", it.id, { ts: new Date().toISOString(), title: it.title, result: why || "published" });
     if (why) { skipped++; log("  skip:", why); continue; }
