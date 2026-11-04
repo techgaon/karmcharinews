@@ -26,6 +26,6 @@ window.KN_CONFIG = {
 
   // AI summaries: Google Gemini (free tier key from aistudio.google.com).
   // The key is entered in Admin → Settings and kept only on the admin's device.
-  geminiModel: "gemini-2.5-flash",
+  geminiModel: "gemini-3.8-flash",
   summaryWords: 100
 };
