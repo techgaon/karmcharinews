@@ -10,7 +10,7 @@ const CFG = JSON.parse(fs.readFileSync(new URL("./feeds.json", import.meta.url))
 const MAX = +(process.env.MAX_PER_RUN || CFG.maxPerRun || 6);
 const DRY = process.env.DRY_RUN === "1";
 const MOCK = process.env.MOCK === "1";
-const MODEL = process.env.GEMINI_MODEL || CFG.model || "gemini-2.5-flash";
+const MODEL = process.env.GEMINI_MODEL || CFG.model || "gemini-3.8-flash";
 const WORDS = 100;
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
@@ -73,6 +73,43 @@ async function readYouTube(ch) {
   }).filter(i => i.title && i.link.length > 35);
 }
 
+/* ---------------- images (photo from the source article / video thumbnail) ---------------- */
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
+async function realUrl(link) {   // Google News RSS link -> publisher article URL
+  if (!/news\.google\.com\/rss\/articles\//.test(link)) return link;
+  try {
+    const id = link.split("/articles/")[1].split("?")[0];
+    const html = await fetch("https://news.google.com/articles/" + id, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(12000) }).then(r => r.text());
+    const sg = (html.match(/data-n-a-sg="([^"]+)"/) || [])[1], ts = (html.match(/data-n-a-ts="([^"]+)"/) || [])[1];
+    if (!sg || !ts) return "";
+    const inner = JSON.stringify(["garturlreq", [["X", "X", ["X", "X"], null, null, 1, 1, "US:en", null, 1, null, null, null, null, null, 0, 1], "X", "X", 1, [1, 1, 1], 1, 1, null, 0, 0, null, 0], id, Number(ts), sg]);
+    const txt = await fetch("https://news.google.com/_/DotsSplashUi/data/batchexecute", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8", "User-Agent": UA }, body: "f.req=" + encodeURIComponent(JSON.stringify([[["Fbv4je", inner]]])), signal: AbortSignal.timeout(12000) }).then(r => r.text());
+    const url = JSON.parse(JSON.parse(txt.split("\n\n")[1])[0][2])[1];
+    return /^https?:\/\//.test(url) ? url : "";
+  } catch (e) { return ""; }
+}
+async function ogImage(url) {   // og:image / twitter:image of the article page
+  try {
+    const html = await fetch(url, { headers: { "User-Agent": UA, "Accept-Language": "hi,en" }, redirect: "follow", signal: AbortSignal.timeout(12000) }).then(r => r.ok ? r.text() : "");
+    const m = html.match(/<meta[^>]+(?:property|name)=["'](?:og:image(?::secure_url)?|twitter:image(?::src)?)["'][^>]*content=["']([^"']+)["']/i)
+      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["'](?:og:image|twitter:image)["']/i);
+    if (!m) return "";
+    let img = m[1].replace(/&amp;/g, "&");
+    if (img.startsWith("//")) img = "https:" + img; else if (img.startsWith("/")) img = new URL(img, url).href;
+    if (!/^https:\/\//.test(img) || /logo|default|placeholder|favicon/i.test(img)) return "";
+    return img;
+  } catch (e) { return ""; }
+}
+async function findImage(it, o) {
+  if (it.video) { const v = (it.link.split("v=")[1] || "").slice(0, 11); return v ? `https://i.ytimg.com/vi/${v}/hqdefault.jpg` : ""; }
+  const url = o.articleUrl && /^https?:\/\//.test(o.articleUrl) && !/google\.|vertexaisearch/.test(o.articleUrl) ? o.articleUrl : await realUrl(it.link);
+  if (!url) return "";
+  it.realUrl = url;
+  const img = await ogImage(url);
+  log("  image:", img ? "found" : "none");
+  return img;
+}
+
 /* ---------------- filters ---------------- */
 const norm = s => s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(w => w.length > 1);
 function similar(a, b) { const A = new Set(norm(a)), B = new Set(norm(b)); if (!A.size || !B.size) return 0; let i = 0; A.forEach(w => B.has(w) && i++); return i / Math.min(A.size, B.size); }
@@ -93,9 +130,9 @@ Steps:
 3. "verified": true ONLY if you could read the article or confirm its facts from reliable sources. Never guess.
 4. If relevant and verified, write ONE card in FOUR languages. Each summary EXACTLY ${WORDS} words, neutral, factual, your own words (do not copy sentences), no invented numbers, dates or names. Headline max 14 words.
    "hi" standard Hindi (Devanagari). "en" simple English. "aw" Awadhi in Devanagari (अहै, अउर, मा, खातिर, कहिन). "bh" Bhojpuri in Devanagari (बा, आ, में, खातिर, कहलें).
-5. Tags: vibhag one of panchayat|shiksha|revenue|police|health|finance|all ; state one of UP|Bihar|MP|Rajasthan|Uttarakhand|National ; district = English name of a UP district if the story is about one district, else "All" ; isGO true if it is about a Government Order/Shasanadesh ; sourceName = publisher.
+5. Tags: vibhag one of panchayat|shiksha|revenue|police|health|finance|all ; state one of UP|Bihar|MP|Rajasthan|Uttarakhand|National ; district = English name of a UP district if the story is about one district, else "All" ; isGO true if it is about a Government Order/Shasanadesh ; sourceName = publisher ; articleUrl = the exact publisher web address of the article you read (not a Google link).
 Reply with ONLY this JSON (no markdown):
-{"relevant":true,"verified":true,"reason":"","hi":{"h":"","s":""},"en":{"h":"","s":""},"aw":{"h":"","s":""},"bh":{"h":"","s":""},"vibhag":"","state":"","district":"","isGO":false,"sourceName":""}`;
+{"relevant":true,"verified":true,"reason":"","hi":{"h":"","s":""},"en":{"h":"","s":""},"aw":{"h":"","s":""},"bh":{"h":"","s":""},"vibhag":"","state":"","district":"","isGO":false,"sourceName":"","articleUrl":""}`;
 }
 function promptVideo(it) {
   return prompt(it).replace(/Steps:\n1\.[^\n]*\n/, `Steps:
@@ -180,8 +217,8 @@ async function main() {
     await db.set("knSeen", it.id, { ts: new Date().toISOString(), title: it.title, result: why || "published" });
     if (why) { skipped++; log("  skip:", why); continue; }
     const doc = {
-      id: it.id, vibhag: o.vibhag, state: o.state, district: o.district, type: it.video ? "video" : "image", image: "", youtube: it.video ? it.link : "",
-      icon: it.video ? "🎬" : o.isGO ? "📄" : ICON[o.vibhag], source: it.video ? it.source : (o.sourceName || it.source || "News"), sourceUrl: it.link,
+      id: it.id, vibhag: o.vibhag, state: o.state, district: o.district, type: it.video ? "video" : "image", image: await findImage(it, o), youtube: it.video ? it.link : "",
+      icon: it.video ? "🎬" : o.isGO ? "📄" : ICON[o.vibhag], source: it.video ? it.source : (o.sourceName || it.source || "News"), sourceUrl: it.realUrl || it.link,
       isGO: !!o.isGO, pinned: false, isDemo: false, ai: true, auto: true, origTitle: it.title,
       ts: new Date().toISOString(), pubDate: it.date || "",
       lang: { hi: o.hi, en: o.en, aw: o.aw, bh: o.bh }
