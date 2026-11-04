@@ -73,9 +73,9 @@ function mediaHTML(n){
   const yt = AI.ytId(n.youtube || (n.type==="video" ? n.sourceUrl : ""));
   let inner;
   if(n.image) inner = "";
-  else if(n.type==="video" && yt) inner = `<img src="https://i.ytimg.com/vi/${yt}/hqdefault.jpg" alt="" loading="lazy">`;
+  else if(n.type==="video" && yt) inner = artSVG(n) + `<img src="https://i.ytimg.com/vi/${yt}/hqdefault.jpg" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`;
   else inner = artSVG(n);
-  if(n.image) inner = artSVG(n) + `<img src="${esc(n.image)}" alt="" loading="lazy" onerror="this.remove()">`;
+  if(n.image) inner = artSVG(n) + `<img src="${esc(n.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`;
   const cl = cardLangOf(n);
   const dist = n.district && n.district !== "All" ? (cl==="en" ? n.district : KN_distName(n.district, "hi")) : KN_stateName(n.state, cl);
   const badge = `${esc(KN_vName(n.vibhag, cl, true))} • ${esc(dist)}`;
