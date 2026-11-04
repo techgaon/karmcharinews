@@ -107,7 +107,7 @@ function cardHTML(n){
   return `<article class="card" data-id="${esc(n.id)}" lang="${tx.l==="en"?"en":"hi"}">
     ${mediaHTML(n)}
     <div class="strip">
-      <div class="logo"><img src="./icons/icon.svg" alt=""><b>Karmchari News</b><span class="tag">${esc(KN_CONFIG.tagline)}</span></div>
+      <div class="logo"><img src="./icon.svg" alt=""><b>Karmchari News</b><span class="tag">${esc(KN_CONFIG.tagline)}</span></div>
       <div class="acts">
         <button class="ab ${bm?"on":""}" data-act="bm" aria-label="Bookmark">${bm?ICON.bmOn:ICON.bm}</button>
         <button class="ab wa" data-act="wa" aria-label="WhatsApp">${ICON.wa}</button>
