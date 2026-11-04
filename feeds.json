@@ -1,0 +1,227 @@
+{
+ "model": "gemini-2.5-flash",
+ "maxPerRun": 6,
+ "maxAgeHours": 48,
+ "keepDays": 45,
+ "feeds": [
+  {
+   "name": "UP employees",
+   "url": "https://news.google.com/rss/search?q=%E0%A4%89%E0%A4%A4%E0%A5%8D%E0%A4%A4%E0%A4%B0%20%E0%A4%AA%E0%A5%8D%E0%A4%B0%E0%A4%A6%E0%A5%87%E0%A4%B6%20%E0%A4%95%E0%A4%B0%E0%A5%8D%E0%A4%AE%E0%A4%9A%E0%A4%BE%E0%A4%B0%E0%A5%80%20when%3A2d&hl=hi&gl=IN&ceid=IN:hi"
+  },
+  {
+   "name": "Panchayat sachiv",
+   "url": "https://news.google.com/rss/search?q=%E0%A4%AA%E0%A4%82%E0%A4%9A%E0%A4%BE%E0%A4%AF%E0%A4%A4%20%E0%A4%B8%E0%A4%9A%E0%A4%BF%E0%A4%B5%20%E0%A4%89%E0%A4%A4%E0%A5%8D%E0%A4%A4%E0%A4%B0%20%E0%A4%AA%E0%A5%8D%E0%A4%B0%E0%A4%A6%E0%A5%87%E0%A4%B6%20when%3A2d&hl=hi&gl=IN&ceid=IN:hi"
+  },
+  {
+   "name": "Panchayati Raj UP",
+   "url": "https://news.google.com/rss/search?q=%E0%A4%AA%E0%A4%82%E0%A4%9A%E0%A4%BE%E0%A4%AF%E0%A4%A4%E0%A5%80%20%E0%A4%B0%E0%A4%BE%E0%A4%9C%20%E0%A4%B5%E0%A4%BF%E0%A4%AD%E0%A4%BE%E0%A4%97%20%E0%A4%89%E0%A4%A4%E0%A5%8D%E0%A4%A4%E0%A4%B0%20%E0%A4%AA%E0%A5%8D%E0%A4%B0%E0%A4%A6%E0%A5%87%E0%A4%B6%20when%3A2d&hl=hi&gl=IN&ceid=IN:hi"
+  },
+  {
+   "name": "DA",
+   "url": "https://news.google.com/rss/search?q=%E0%A4%AE%E0%A4%B9%E0%A4%82%E0%A4%97%E0%A4%BE%E0%A4%88%20%E0%A4%AD%E0%A4%A4%E0%A5%8D%E0%A4%A4%E0%A4%BE%20%E0%A4%95%E0%A4%B0%E0%A5%8D%E0%A4%AE%E0%A4%9A%E0%A4%BE%E0%A4%B0%E0%A5%80%20when%3A2d&hl=hi&gl=IN&ceid=IN:hi"
+  },
+  {
+   "name": "Pension",
+   "url": "https://news.google.com/rss/search?q=%E0%A4%AA%E0%A5%87%E0%A4%82%E0%A4%B6%E0%A4%A8%20%E0%A4%95%E0%A4%B0%E0%A5%8D%E0%A4%AE%E0%A4%9A%E0%A4%BE%E0%A4%B0%E0%A5%80%20%E0%A4%B6%E0%A4%BE%E0%A4%B8%E0%A4%A8%E0%A4%BE%E0%A4%A6%E0%A5%87%E0%A4%B6%20when%3A2d&hl=hi&gl=IN&ceid=IN:hi"
+  },
+  {
+   "name": "8th pay",
+   "url": "https://news.google.com/rss/search?q=8%E0%A4%B5%E0%A4%BE%E0%A4%82%20%E0%A4%B5%E0%A5%87%E0%A4%A4%E0%A4%A8%20%E0%A4%86%E0%A4%AF%E0%A5%8B%E0%A4%97%20when%3A2d&hl=hi&gl=IN&ceid=IN:hi"
+  },
+  {
+   "name": "Teachers",
+   "url": "https://news.google.com/rss/search?q=%E0%A4%AC%E0%A5%87%E0%A4%B8%E0%A4%BF%E0%A4%95%20%E0%A4%B6%E0%A4%BF%E0%A4%95%E0%A5%8D%E0%A4%B7%E0%A4%95%20%E0%A4%89%E0%A4%A4%E0%A5%8D%E0%A4%A4%E0%A4%B0%20%E0%A4%AA%E0%A5%8D%E0%A4%B0%E0%A4%A6%E0%A5%87%E0%A4%B6%20when%3A2d&hl=hi&gl=IN&ceid=IN:hi"
+  },
+  {
+   "name": "Lekhpal",
+   "url": "https://news.google.com/rss/search?q=%E0%A4%B2%E0%A5%87%E0%A4%96%E0%A4%AA%E0%A4%BE%E0%A4%B2%20%E0%A4%89%E0%A4%A4%E0%A5%8D%E0%A4%A4%E0%A4%B0%20%E0%A4%AA%E0%A5%8D%E0%A4%B0%E0%A4%A6%E0%A5%87%E0%A4%B6%20when%3A2d&hl=hi&gl=IN&ceid=IN:hi"
+  },
+  {
+   "name": "Police HG",
+   "url": "https://news.google.com/rss/search?q=%E0%A4%B9%E0%A5%8B%E0%A4%AE%E0%A4%97%E0%A4%BE%E0%A4%B0%E0%A5%8D%E0%A4%A1%20%E0%A4%AA%E0%A5%81%E0%A4%B2%E0%A4%BF%E0%A4%B8%20%E0%A4%95%E0%A4%B0%E0%A5%8D%E0%A4%AE%E0%A4%9A%E0%A4%BE%E0%A4%B0%E0%A5%80%20%E0%A4%89%E0%A4%A4%E0%A5%8D%E0%A4%A4%E0%A4%B0%20%E0%A4%AA%E0%A5%8D%E0%A4%B0%E0%A4%A6%E0%A5%87%E0%A4%B6%20when%3A2d&hl=hi&gl=IN&ceid=IN:hi"
+  },
+  {
+   "name": "ASHA Anganwadi",
+   "url": "https://news.google.com/rss/search?q=%E0%A4%86%E0%A4%B6%E0%A4%BE%20%E0%A4%86%E0%A4%82%E0%A4%97%E0%A4%A8%E0%A4%B5%E0%A4%BE%E0%A4%A1%E0%A4%BC%E0%A5%80%20%E0%A4%AE%E0%A4%BE%E0%A4%A8%E0%A4%A6%E0%A5%87%E0%A4%AF%20when%3A2d&hl=hi&gl=IN&ceid=IN:hi"
+  },
+  {
+   "name": "Shasanadesh",
+   "url": "https://news.google.com/rss/search?q=%E0%A4%B6%E0%A4%BE%E0%A4%B8%E0%A4%A8%E0%A4%BE%E0%A4%A6%E0%A5%87%E0%A4%B6%20%E0%A4%9C%E0%A4%BE%E0%A4%B0%E0%A5%80%20%E0%A4%95%E0%A4%B0%E0%A5%8D%E0%A4%AE%E0%A4%9A%E0%A4%BE%E0%A4%B0%E0%A5%80%20when%3A2d&hl=hi&gl=IN&ceid=IN:hi"
+  },
+  {
+   "name": "Transfers",
+   "url": "https://news.google.com/rss/search?q=%E0%A4%A4%E0%A4%AC%E0%A4%BE%E0%A4%A6%E0%A4%B2%E0%A4%BE%20%E0%A4%A8%E0%A5%80%E0%A4%A4%E0%A4%BF%20%E0%A4%89%E0%A4%A4%E0%A5%8D%E0%A4%A4%E0%A4%B0%20%E0%A4%AA%E0%A5%8D%E0%A4%B0%E0%A4%A6%E0%A5%87%E0%A4%B6%20%E0%A4%95%E0%A4%B0%E0%A5%8D%E0%A4%AE%E0%A4%9A%E0%A4%BE%E0%A4%B0%E0%A5%80%20when%3A2d&hl=hi&gl=IN&ceid=IN:hi"
+  },
+  {
+   "name": "Barabanki",
+   "url": "https://news.google.com/rss/search?q=%E0%A4%AC%E0%A4%BE%E0%A4%B0%E0%A4%BE%E0%A4%AC%E0%A4%82%E0%A4%95%E0%A5%80%20%E0%A4%95%E0%A4%B0%E0%A5%8D%E0%A4%AE%E0%A4%9A%E0%A4%BE%E0%A4%B0%E0%A5%80%20when%3A2d&hl=hi&gl=IN&ceid=IN:hi"
+  },
+  {
+   "name": "Bihar employees",
+   "url": "https://news.google.com/rss/search?q=%E0%A4%AC%E0%A4%BF%E0%A4%B9%E0%A4%BE%E0%A4%B0%20%E0%A4%B8%E0%A4%B0%E0%A4%95%E0%A4%BE%E0%A4%B0%E0%A5%80%20%E0%A4%95%E0%A4%B0%E0%A5%8D%E0%A4%AE%E0%A4%9A%E0%A4%BE%E0%A4%B0%E0%A5%80%20when%3A2d&hl=hi&gl=IN&ceid=IN:hi"
+  }
+ ],
+ "keywords": [
+  "कर्मचारी",
+  "कर्मियों",
+  "शिक्षक",
+  "शिक्षकों",
+  "सचिव",
+  "पंचायत",
+  "लेखपाल",
+  "पुलिसकर्मी",
+  "सिपाही",
+  "होमगार्ड",
+  "आशा",
+  "आंगनबाड़ी",
+  "आंगनवाड़ी",
+  "शिक्षामित्र",
+  "अनुदेशक",
+  "रोजगार सेवक",
+  "वेतन",
+  "भत्ता",
+  "भत्ते",
+  "DA",
+  "पेंशन",
+  "पेंशनर",
+  "शासनादेश",
+  "आदेश",
+  "तबादला",
+  "तबादले",
+  "स्थानांतरण",
+  "पदोन्नति",
+  "प्रमोशन",
+  "वेतन आयोग",
+  "संविदा",
+  "मानदेय",
+  "निलंबित",
+  "अवकाश",
+  "छुट्टी",
+  "सेवानिवृत्त",
+  "employees",
+  "employee",
+  "teachers",
+  "pension",
+  "dearness",
+  "pay commission",
+  "transfer",
+  "karmchari",
+  "8th pay",
+  "7th pay",
+  "govt employees",
+  "pensioners",
+  "salary",
+  "OPS",
+  "NPS",
+  "UPS"
+ ],
+ "blockWords": [
+  "क्रिकेट",
+  "IPL",
+  "बॉलीवुड",
+  "फिल्म",
+  "राशिफल",
+  "शेयर बाजार",
+  "सोना-चांदी"
+ ],
+ "upDistricts": [
+  "Agra",
+  "Aligarh",
+  "Ambedkar Nagar",
+  "Amethi",
+  "Amroha",
+  "Auraiya",
+  "Ayodhya",
+  "Azamgarh",
+  "Baghpat",
+  "Bahraich",
+  "Ballia",
+  "Balrampur",
+  "Banda",
+  "Barabanki",
+  "Bareilly",
+  "Basti",
+  "Bhadohi",
+  "Bijnor",
+  "Budaun",
+  "Bulandshahr",
+  "Chandauli",
+  "Chitrakoot",
+  "Deoria",
+  "Etah",
+  "Etawah",
+  "Farrukhabad",
+  "Fatehpur",
+  "Firozabad",
+  "Gautam Buddh Nagar",
+  "Ghaziabad",
+  "Ghazipur",
+  "Gonda",
+  "Gorakhpur",
+  "Hamirpur",
+  "Hapur",
+  "Hardoi",
+  "Hathras",
+  "Jalaun",
+  "Jaunpur",
+  "Jhansi",
+  "Kannauj",
+  "Kanpur Dehat",
+  "Kanpur Nagar",
+  "Kasganj",
+  "Kaushambi",
+  "Kushinagar",
+  "Lakhimpur Kheri",
+  "Lalitpur",
+  "Lucknow",
+  "Maharajganj",
+  "Mahoba",
+  "Mainpuri",
+  "Mathura",
+  "Mau",
+  "Meerut",
+  "Mirzapur",
+  "Moradabad",
+  "Muzaffarnagar",
+  "Pilibhit",
+  "Pratapgarh",
+  "Prayagraj",
+  "Raebareli",
+  "Rampur",
+  "Saharanpur",
+  "Sambhal",
+  "Sant Kabir Nagar",
+  "Shahjahanpur",
+  "Shamli",
+  "Shravasti",
+  "Siddharthnagar",
+  "Sitapur",
+  "Sonbhadra",
+  "Sultanpur",
+  "Unnao",
+  "Varanasi"
+ ],
+ "youtube": [
+  {
+   "name": "GyanGanv का सचिव",
+   "id": "@GYANGANV"
+  },
+  {
+   "name": "Govt Employees Times",
+   "id": "UCQTwpDrrW_kZJDBeNjS2vVQ"
+  },
+  {
+   "name": "Govt Staff News",
+   "id": "UC2BTwDM0nS5Dog5otpZ7kCw"
+  },
+  {
+   "name": "GOVERNMENT STAFF",
+   "id": "UCGWq4VtQu0uTy1x57GkrMqQ"
+  },
+  {
+   "name": "P N News 51",
+   "id": "UCDXHCZJFU-qYcUUrgp5umaQ"
+  }
+ ],
+ "maxVideosPerRun": 3
+}

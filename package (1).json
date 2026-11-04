@@ -1,0 +1,7 @@
+{
+  "name": "karmchari-news-bot",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node autopublish.mjs", "mock": "MOCK=1 node autopublish.mjs" },
+  "dependencies": { "firebase-admin": "^12.7.0" }
+}

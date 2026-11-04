@@ -1,0 +1,21 @@
+{
+  "name": "karmchari-news",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Karmchari News — Inshorts-style employee news PWA (techgaon.in/karmcharinews)",
+  "scripts": {
+    "serve": "npx http-server . -p 8080 -c-1",
+    "build:www": "node scripts/build-www.js",
+    "cap:add": "npm run build:www && npx cap add android",
+    "cap:sync": "npm run build:www && npx cap sync android",
+    "apk": "npm run cap:sync && cd android && ./gradlew assembleRelease",
+    "aab": "npm run cap:sync && cd android && ./gradlew bundleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0"
+  }
+}

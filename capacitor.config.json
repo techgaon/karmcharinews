@@ -1,0 +1,7 @@
+{
+  "appId": "in.techgaon.karmcharinews",
+  "appName": "Karmchari News",
+  "webDir": "www",
+  "server": { "androidScheme": "https" },
+  "android": { "backgroundColor": "#0b2545" }
+}

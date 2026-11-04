@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Karmchari News — News in 60 Sec</title>
+<meta name="description" content="Karmchari News: employee, department, state and district news in 100 words — Hindi, English, Awadhi, Bhojpuri.">
+<meta name="theme-color" content="#0b2545">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+Devanagari:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./css/app.css">
+</head>
+<body>
+<div id="frame">
+  <div id="app">
+    <!-- top bar -->
+    <header id="topbar">
+      <button class="ic" id="btnMenu" aria-label="Menu">☰</button>
+      <div id="topTitle"><span class="tt-main" data-i="all_news">ALL KARMCHARI NEWS</span></div>
+      <div class="langpill" id="topLang"></div>
+      <button class="ic" id="btnLock" aria-label="Admin">🔒</button>
+    </header>
+
+    <!-- feed -->
+    <main id="feed" tabindex="0" aria-live="polite"></main>
+    <div id="hint" data-i="swipe_hint">Swipe up for next story</div>
+
+    <!-- drawer -->
+    <div id="scrim"></div>
+    <aside id="drawer" aria-hidden="true">
+      <div class="dr-head">
+        <div class="brand"><img src="./icons/icon.svg" alt=""><div><b>Karmchari News</b><small data-i="discover">Discover</small></div></div>
+        <button class="ic" id="btnClose" aria-label="Close">✕</button>
+      </div>
+      <div class="dr-body">
+        <section id="profileBox"></section>
+
+        <div class="tabs" id="feedTabs"></div>
+
+        <h4 data-i="vibhag">Vibhag (Department)</h4>
+        <div class="chips" id="vibhagChips"></div>
+
+        <h4 data-i="state">State</h4>
+        <div class="chips" id="stateChips"></div>
+
+        <h4 data-i="district">District</h4>
+        <input id="distSearch" class="inp" data-ph="search_district" placeholder="Search district…" autocomplete="off">
+        <div class="distlist" id="distList"></div>
+
+        <button class="btn primary wide" id="btnSaveFeed" data-i="save_myfeed">Save as My Feed</button>
+        <button class="btn ghost wide" id="btnClearF" data-i="clear_filters">Clear filters</button>
+
+        <h4 data-i="ui_lang">App language</h4>
+        <div class="chips" id="uiLangChips"></div>
+        <h4 data-i="news_lang">Default news language</h4>
+        <div class="chips" id="newsLangChips"></div>
+
+        <button class="btn ghost wide" id="btnAdmin2">🔒 <span data-i="admin_login">Admin Login</span></button>
+        <p class="foot-note">Karmchari News · techgaon.in/karmcharinews<br>TechGaon AI Services</p>
+      </div>
+    </aside>
+
+    <!-- modal host -->
+    <div id="modal" class="modal" hidden><div class="sheet" id="sheet"></div></div>
+    <div id="toast"></div>
+  </div>
+</div>
+
+<script src="./js/config.js"></script>
+<script src="./js/data.js"></script>
+<script src="./js/i18n.js"></script>
+<script src="./js/store.js"></script>
+<script src="./js/ai.js"></script>
+<script src="./js/app.js"></script>
+<script src="./js/admin.js"></script>
+<script>
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
