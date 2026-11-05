@@ -447,10 +447,16 @@ function renderDrawer(){
 
   const tabs = [["all","all_news"],["my","my_feed"],["bm","bookmarks"],["go","gos"]];
   $("#feedTabs").innerHTML = tabs.map(([k,key])=>`<button data-tab="${k}" class="${S.tab===k?"on":""}">${t(key)}</button>`).join("");
-  $("#vibhagChips").innerHTML = `<button data-v="" class="${!S.f.vibhag?"on":""}">${t("all_vibhag")}</button>` +
-    KN_VIBHAG.map(v=>`<button data-v="${v.id}" class="${S.f.vibhag===v.id?"on":""}" style="--c:${v.c1}">${esc(v.n[KN_LI[S.uiLang]])}</button>`).join("");
-  $("#stateChips").innerHTML = `<button data-s="" class="${!S.f.state?"on":""}">${t("all_states")}</button>` +
-    KN_STATES.map(s=>`<button data-s="${s.id}" class="${S.f.state===s.id?"on":""}">${esc(KN_stateName(s.id, S.uiLang))}</button>`).join("");
+  const CHK = `<b class="tick">✓</b>`;
+  $("#vibhagChips").innerHTML = `<button data-v="" class="vc allv ${!S.f.vibhag?"on":""}" style="--c1:#0b2545;--c2:#13315c"><i>🗂️</i><span>${t("all_vibhag")}</span>${CHK}</button>` +
+    KN_VIBHAG.map(v=>`<button data-v="${v.id}" class="vc ${S.f.vibhag===v.id?"on":""}" style="--c1:${v.c1};--c2:${v.c2}"><i>${VICON[v.id]||"📰"}</i><span>${esc(KN_vName(v.id, S.uiLang, true))}</span>${CHK}</button>`).join("");
+  const SC = {UP:["UP","#f97316","#fb923c"], Bihar:["BR","#16a34a","#4ade80"], MP:["MP","#7c3aed","#a78bfa"], Rajasthan:["RJ","#db2777","#f472b6"], Uttarakhand:["UK","#0891b2","#22d3ee"], National:["🇮🇳","#1e3a8a","#3b82f6"], Other:["🗺️","#475569","#94a3b8"]};
+  $("#stateChips").innerHTML = `<button data-s="" class="sc ${!S.f.state?"on":""}" style="--c1:#0b2545;--c2:#13315c"><i>🌐</i><span>${t("all_states")}</span>${CHK}</button>` +
+    KN_STATES.map(st=>{ const c = SC[st.id] || ["•","#475569","#94a3b8"]; return `<button data-s="${st.id}" class="sc ${S.f.state===st.id?"on":""}" style="--c1:${c[1]};--c2:${c[2]}"><i>${c[0]}</i><span>${esc(KN_stateName(st.id, S.uiLang))}</span>${CHK}</button>`; }).join("");
+  const sel = (id, txt) => { const el = $(id); if(el){ el.textContent = txt || ""; el.hidden = !txt; } };
+  sel("#selV", S.f.vibhag ? KN_vName(S.f.vibhag, S.uiLang, true) : "");
+  sel("#selS", S.f.state ? KN_stateName(S.f.state, S.uiLang) : "");
+  sel("#selD", S.f.district ? KN_distName(S.f.district, S.uiLang) : "");
   renderDistricts();
   $("#uiLangChips").innerHTML = KN_LANGS.map(l=>`<button data-ui="${l.k}" class="${S.uiLang===l.k?"on":""}">${l.label}</button>`).join("");
   $("#newsLangChips").innerHTML = KN_LANGS.map(l=>`<button data-nl="${l.k}" class="${S.newsLang===l.k?"on":""}">${l.label}</button>`).join("");
@@ -458,10 +464,12 @@ function renderDrawer(){
 function renderDistricts(){
   const q = ($("#distSearch").value||"").trim().toLowerCase();
   const box = $("#distList");
-  if(S.f.state && S.f.state !== "UP"){ box.innerHTML = `<p class="muted sm">${t("all_districts")} — ${esc(KN_stateName(S.f.state, S.uiLang))}</p>`; return; }
+  const sb = $("#distSearchBox"); if(sb) sb.hidden = !!(S.f.state && S.f.state !== "UP");
+  if(S.f.state && S.f.state !== "UP"){ box.innerHTML = `<p class="dnote">📍 ${t("all_districts")} — ${esc(KN_stateName(S.f.state, S.uiLang))}</p>`; return; }
   const list = KN_UP_DISTRICTS.filter(d => !q || d[0].toLowerCase().includes(q) || d[1].includes(q));
-  box.innerHTML = (!q?`<button data-d="" class="${!S.f.district?"on":""}">${t("all_districts")}</button>`:"") +
-    list.map(d=>`<button data-d="${esc(d[0])}" class="${S.f.district===d[0]?"on":""}">${esc(S.uiLang==="en"?d[0]:d[1])}${S.uiLang==="en"?"":` <small>${esc(d[0])}</small>`}</button>`).join("");
+  box.innerHTML = (!q?`<button data-d="" class="${!S.f.district?"on":""}">📍 ${t("all_districts")}</button>`:"") +
+    list.map(d=>`<button data-d="${esc(d[0])}" class="${S.f.district===d[0]?"on":""}">${esc(S.uiLang==="en"?d[0]:d[1])}${S.uiLang==="en"?"":` <small>${esc(d[0])}</small>`}</button>`).join("") +
+    (q && !list.length ? `<p class="muted sm">—</p>` : "");
 }
 function openDrawer(){ $("#drawer").classList.add("open"); $("#scrim").classList.add("on"); $("#drawer").setAttribute("aria-hidden","false"); }
 function closeDrawer(){ $("#drawer").classList.remove("open"); $("#scrim").classList.remove("on"); $("#drawer").setAttribute("aria-hidden","true"); }
