@@ -144,7 +144,7 @@ function cardHTML(n){
   return `<article class="card" data-id="${esc(n.id)}" lang="${tx.l==="en"?"en":"hi"}">
     ${mediaHTML(n)}
     <div class="strip">
-      <div class="logo"><img src="./icon.svg" alt=""><b>Karmchari News</b><span class="tag">${esc(KN_CONFIG.tagline)}</span></div>
+      <div class="logo"><img src="./icon.svg" alt=""><span class="nm"><b>Karmchari</b><b>News</b></span><span class="tag">News in<em>100 words</em></span></div>
       <div class="acts">
         <button class="ab ${bm?"on":""}" data-act="bm" aria-label="Bookmark">${bm?ICON.bmOn:ICON.bm}</button>
         <button class="ab wa" data-act="wa" aria-label="WhatsApp">${ICON.wa}</button>
@@ -286,16 +286,100 @@ function onCardClick(e){
 
 /* ---------------- actions ---------------- */
 function storyUrl(n){ return KN_CONFIG.shareUrl + "#n=" + encodeURIComponent(n.id); }
+function shareCaption(n){
+  const en = cardLangOf(n) === "en";
+  return (en ? "Every employee news in just 100 words. Read on Karmchari News 👇\n" : "कर्मचारियों की हर ख़बर सिर्फ़ 100 शब्दों में। पढ़ें Karmchari News पर 👇\n") + storyUrl(n);
+}
 function shareText(n){ const tx = textOf(n, cardLangOf(n)); return `*${tx.h}*\n\n${tx.s}\n\n📰 Karmchari News — ${KN_CONFIG.tagline}\n${storyUrl(n)}`; }
-function shareWhatsApp(n){ window.open("https://wa.me/?text=" + encodeURIComponent(shareText(n)), "_blank", "noopener"); }
-async function shareNative(n){
+/* ---- Inshorts-style share card (image) ---- */
+const SHARE_CACHE = {};
+function loadImg(src, cors){ return new Promise(res => { if(!src) return res(null); const im = new Image(); if(cors) im.crossOrigin = "anonymous"; let done = false;
+  const fin = v => { if(!done){ done = true; res(v); } }; im.onload = () => fin(im); im.onerror = () => fin(null); setTimeout(()=>fin(null), 3500); im.src = src; }); }
+function proxied(u, w, h){ return "https://images.weserv.nl/?url=" + encodeURIComponent(u.replace(/^https?:\/\//, "")) + `&w=${w}&h=${h}&fit=cover&a=attention&output=jpg&q=82`; }
+function wrapLines(ctx, text, maxW, maxLines){
+  const words = String(text).split(/\s+/); const lines = []; let cur = "";
+  for(const w of words){ const tst = cur ? cur + " " + w : w; if(ctx.measureText(tst).width > maxW && cur){ lines.push(cur); cur = w; } else cur = tst; }
+  if(cur) lines.push(cur);
+  if(maxLines && lines.length > maxLines){ const keep = lines.slice(0, maxLines); keep[maxLines-1] = keep[maxLines-1].replace(/\s*\S*$/, "") + " …"; return keep; }
+  return lines;
+}
+function rr(ctx, x, y, w, h, r){ ctx.beginPath(); ctx.moveTo(x+r, y); ctx.arcTo(x+w, y, x+w, y+h, r); ctx.arcTo(x+w, y+h, x, y+h, r); ctx.arcTo(x, y+h, x, y, r); ctx.arcTo(x, y, x+w, y, r); ctx.closePath(); }
+async function makeShareImage(n){
+  const l = cardLangOf(n), key = n.id + "|" + l; if(SHARE_CACHE[key]) return SHARE_CACHE[key];
+  const tx = textOf(n, l), en = tx.l === "en";
+  const W = 1080, PH = 600, PAD = 56;
+  const dev = en ? '"Inter","Noto Sans Devanagari",sans-serif' : '"Noto Sans Devanagari","Inter",sans-serif';
+  try{ await document.fonts.ready; await Promise.all([document.fonts.load('800 50px "Noto Sans Devanagari"'), document.fonts.load('400 36px "Noto Sans Devanagari"'), document.fonts.load('800 30px "Inter"')]); }catch(e){}
+  const yt = AI.ytId(n.youtube || (n.type==="video" ? n.sourceUrl : ""));
+  const raw = n.image || (yt ? `https://i.ytimg.com/vi/${yt}/mqdefault.jpg` : "");
+  const [photo, logo] = await Promise.all([raw ? loadImg(proxied(raw, W, PH), true) : null, loadImg("./icon-192.png", false)]);
+  // measure text first
+  const m = document.createElement("canvas").getContext("2d");
+  m.font = `800 50px ${dev}`; const hl = wrapLines(m, tx.h, W - PAD*2, 3);
+  m.font = `400 36px ${dev}`; const sl = wrapLines(m, tx.s, W - PAD*2, 12);
+  const place = placeLine(n, tx.l);
+  const H = PH + 70 + hl.length*66 + 22 + sl.length*56 + 30 + 56 + 40 + 120;
+  const c = document.createElement("canvas"); c.width = W; c.height = H; const ctx = c.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+  const v = KN_vibhag(n.vibhag);
+  const g = ctx.createLinearGradient(0, 0, W, PH); g.addColorStop(0, v.c1); g.addColorStop(1, v.c2); ctx.fillStyle = g; ctx.fillRect(0, 0, W, PH);
+  if(photo) ctx.drawImage(photo, 0, 0, W, PH);
+  else { ctx.font = "200px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(VICON[n.vibhag] || "📰", W/2, PH/2); ctx.textAlign = "left"; }
+  // vibhag badge
+  ctx.textBaseline = "middle"; ctx.font = `800 30px ${dev}`;
+  const bt = (VICON[n.vibhag]||"📰") + "  " + KN_vName(n.vibhag, l, true); const bw = ctx.measureText(bt).width + 48;
+  const bg = ctx.createLinearGradient(PAD, 0, PAD+bw, 0); bg.addColorStop(0, v.c1); bg.addColorStop(1, v.c2);
+  ctx.fillStyle = bg; rr(ctx, PAD-16, 30, bw, 60, 30); ctx.fill(); ctx.fillStyle = "#fff"; ctx.fillText(bt, PAD+8, 61);
+  // brand pill bottom-left of photo
+  ctx.fillStyle = "#fff"; rr(ctx, PAD-16, PH - 46, 430, 92, 18); ctx.fill();
+  if(logo) ctx.drawImage(logo, PAD, PH - 34, 68, 68);
+  ctx.fillStyle = "#0b2545"; ctx.font = '800 34px "Inter",sans-serif'; ctx.fillText("Karmchari News", PAD + 84, PH - 12);
+  ctx.fillStyle = "#ff7a00"; ctx.font = '700 22px "Inter",sans-serif'; ctx.fillText("News in 100 words", PAD + 84, PH + 22);
+  // headline + summary
+  let y = PH + 70 + 66; ctx.textBaseline = "alphabetic"; ctx.fillStyle = "#111827"; ctx.font = `800 50px ${dev}`;
+  for(const ln of hl){ ctx.fillText(ln, PAD, y); y += 66; }
+  y += 22 - 66 + 56; ctx.fillStyle = "#4b5563"; ctx.font = `400 36px ${dev}`;
+  for(const ln of sl){ ctx.fillText(ln, PAD, y); y += 56; }
+  y += 10; ctx.font = `600 28px ${dev}`; ctx.fillStyle = "#0f766e";
+  const metaTxt = (place ? "📍 " + place + "   " : "") + "🕒 " + new Date(n.ts || Date.now()).toLocaleDateString(en ? "en-IN" : "hi-IN", {day:"numeric", month:"short", year:"numeric"});
+  ctx.fillText(wrapLines(ctx, metaTxt, W - PAD*2, 1)[0], PAD, y + 20);
+  // bottom bar
+  ctx.fillStyle = "#0b2545"; ctx.fillRect(0, H - 120, W, 120);
+  ctx.fillStyle = "#fff"; ctx.font = `600 28px ${dev}`; ctx.textBaseline = "middle";
+  ctx.fillText((en ? "Source: " : "स्रोत: ") + (n.source || "Karmchari News"), PAD, H - 78);
+  ctx.fillStyle = "#ffb347"; ctx.font = '700 28px "Inter",sans-serif'; ctx.fillText("techgaon.in/karmcharinews", PAD, H - 38);
+  const blob = await new Promise(r => { try{ c.toBlob(r, "image/jpeg", 0.88); }catch(e){ r(null); } });
+  if(!blob) return null;
+  const file = new File([blob], `karmchari-news-${String(n.id).slice(0,12)}.jpg`, {type:"image/jpeg"});
+  SHARE_CACHE[key] = file; return file;
+}
+async function shareCard(n, viaWa){
+  let file = null;
+  if(navigator.canShare){ toast(cardLangOf(n)==="en" ? "Preparing card…" : "कार्ड तैयार हो रहा है…"); try{ file = await makeShareImage(n); }catch(e){ file = null; } }
+  if(file && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file], text: shareCaption(n)}); return; }
+    catch(e){
+      if(e.name === "AbortError") return;
+      if(e.name === "NotAllowedError"){ // user gesture expired while drawing — ask for one more tap
+        openModal(`<h3>${t("share")}</h3><img src="${URL.createObjectURL(file)}" style="width:100%;border-radius:12px;margin:8px 0" alt=""><button class="btn primary" id="shNow" style="width:100%">📤 ${t("share")}</button>`);
+        $("#shNow").onclick = async () => { try{ await navigator.share({files:[file], text: shareCaption(n)}); }catch(_){} closeModal(); };
+        return;
+      }
+    }
+  }
+  if(viaWa) window.open("https://wa.me/?text=" + encodeURIComponent(shareText(n)), "_blank", "noopener");
+  else shareFallback(n);
+}
+function shareWhatsApp(n){ shareCard(n, true); }
+function shareNative(n){ shareCard(n, false); }
+async function shareFallback(n){
   const tx = textOf(n, cardLangOf(n));
   if(navigator.share){ try{ await navigator.share({title: tx.h, text: shareText(n), url: storyUrl(n)}); return; }catch(e){ if(e.name==="AbortError") return; } }
   openModal(`<h3>${t("share")}</h3><p class="muted">${esc(tx.h)}</p>
     <input class="inp" readonly value="${esc(storyUrl(n))}" id="shareLink">
     <div class="row"><button class="btn primary" id="cpy">${t("copy_link")}</button><button class="btn wa" id="waS">WhatsApp</button></div>
     <button class="btn ghost wide" data-close>${t("close")}</button>`);
-  $("#cpy").onclick = () => copy(storyUrl(n)); $("#waS").onclick = () => shareWhatsApp(n);
+  $("#cpy").onclick = () => copy(storyUrl(n)); $("#waS").onclick = () => window.open("https://wa.me/?text=" + encodeURIComponent(shareText(n)), "_blank", "noopener");
 }
 function copy(s){ (navigator.clipboard ? navigator.clipboard.writeText(s) : Promise.reject()).then(()=>toast(t("copied")), ()=>{ const i = $("#shareLink"); if(i){ i.select(); document.execCommand("copy"); toast(t("copied")); } }); }
 function openSource(n){
