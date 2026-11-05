@@ -45,15 +45,21 @@
 
         <div class="tabs" id="feedTabs"></div>
 
-        <h4 data-i="vibhag">Vibhag (Department)</h4>
-        <div class="chips" id="vibhagChips"></div>
+        <section class="fsec">
+          <h4 class="fh"><span class="fi">🏢</span><span data-i="vibhag">Vibhag (Department)</span><em id="selV" hidden></em></h4>
+          <div class="vgrid" id="vibhagChips"></div>
+        </section>
 
-        <h4 data-i="state">State</h4>
-        <div class="chips" id="stateChips"></div>
+        <section class="fsec">
+          <h4 class="fh"><span class="fi">🗺️</span><span data-i="state">State</span><em id="selS" hidden></em></h4>
+          <div class="vgrid sgrid" id="stateChips"></div>
+        </section>
 
-        <h4 data-i="district">District</h4>
-        <input id="distSearch" class="inp" data-ph="search_district" placeholder="Search district…" autocomplete="off">
-        <div class="distlist" id="distList"></div>
+        <section class="fsec">
+          <h4 class="fh"><span class="fi">📍</span><span data-i="district">District</span><em id="selD" hidden></em></h4>
+          <label class="srch" id="distSearchBox"><span>🔍</span><input id="distSearch" data-ph="search_district" placeholder="Search district…" autocomplete="off"></label>
+          <div class="distlist" id="distList"></div>
+        </section>
 
         <button class="btn primary wide" id="btnSaveFeed" data-i="save_myfeed">Save as My Feed</button>
         <button class="btn ghost wide" id="btnClearF" data-i="clear_filters">Clear filters</button>
