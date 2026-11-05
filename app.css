@@ -256,3 +256,14 @@ textarea.inp{resize:vertical;min-height:84px;line-height:1.5}
 .dnote{margin:0;padding:10px 12px;border-radius:12px;background:#f0fdf4;color:#166534;font-size:12.5px;font-weight:600}
 #drawer.open .fsec{animation:fadeUp .4s both}#drawer.open .fsec:nth-of-type(2){animation-delay:.05s}#drawer.open .fsec:nth-of-type(3){animation-delay:.1s}
 #vibhagChips.vgrid button{border-left-width:1.5px;border-left-color:#edf0f5}#vibhagChips.vgrid button.on{border-left-color:transparent}
+
+/* admin visitors */
+.vstat{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.vs{background:#f8fafc;border:1px solid #e6eaf2;border-radius:14px;padding:10px 12px}
+.vs small{display:block;color:var(--ink2);font-size:11.5px;font-weight:700}.vs b{display:block;font-size:22px;color:var(--navy);font-family:var(--lat)}.vs span{font-size:11px;color:var(--ink2)}
+.vs.big{grid-column:1/-1;background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;border:0}.vs.big b{color:#fff;font-size:34px}.vs.big small,.vs.big span{color:var(--saffron2)}
+.vbars{display:flex;align-items:flex-end;gap:4px;height:130px;padding:6px 2px 0;border-bottom:1px solid #e6eaf2}
+.vb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0}
+.vb i{position:relative;display:block;width:100%;min-height:2px;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,var(--saffron),#ff4d00)}
+.vb em{position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-style:normal;font-size:9px;font-weight:700;color:var(--navy)}
+.vb small{font-size:8.5px;color:var(--ink2);margin-top:3px;white-space:nowrap}
