@@ -136,6 +136,27 @@ function placeLine(n, l){
   if(S) return `${S} ${K.f} ${K.nw}`;
   return "";
 }
+/* ---- likes ❤️ ---- */
+const HEART = `<svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.2 5.3 3.1 1.7-1.9 3.2-3.1 5.3-3.1 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/></svg>`;
+const likedSet = () => { try{ return new Set(JSON.parse(localStorage.getItem("kn_liked") || "[]")); }catch(e){ return new Set(); } };
+const fmtN = c => c >= 1e5 ? (c/1e5).toFixed(1).replace(/\.0$/,"") + "L" : c >= 1000 ? (c/1000).toFixed(1).replace(/\.0$/,"") + "K" : String(c);
+function likeBtn(n){
+  const on = likedSet().has(n.id), c = Store.likes(n.id);
+  return `<button class="ab like ${on?"on":""}" data-act="like" aria-label="Like" aria-pressed="${on}">${HEART}<span class="lc">${c ? fmtN(c) : ""}</span></button>`;
+}
+function toggleLike(n, btn){
+  const set = likedSet(), on = !set.has(n.id);
+  on ? set.add(n.id) : set.delete(n.id); localStorage.setItem("kn_liked", JSON.stringify([...set]));
+  Store.like(n.id, on ? 1 : -1);
+  btn.classList.toggle("on", on); btn.setAttribute("aria-pressed", on);
+  const c = Store.likes(n.id); btn.querySelector(".lc").textContent = c ? fmtN(c) : "";
+  if(on){
+    btn.classList.remove("pop"); void btn.offsetWidth; btn.classList.add("pop");
+    for(let i = 0; i < 8; i++){ const p = document.createElement("i"); p.className = "spark"; p.style.setProperty("--a", (i * 45) + "deg"); btn.appendChild(p); setTimeout(()=>p.remove(), 650); }
+    const big = document.createElement("div"); big.className = "bigheart"; big.innerHTML = HEART; btn.closest(".card")?.appendChild(big); setTimeout(()=>big.remove(), 900);
+    if(navigator.vibrate) navigator.vibrate(15);
+  }
+}
 function cardHTML(n){
   const cl = cardLangOf(n), tx = textOf(n, cl), p = Store.prefs();
   const bm = p.bookmarks.includes(n.id);
@@ -149,6 +170,7 @@ function cardHTML(n){
         <button class="ab ${bm?"on":""}" data-act="bm" aria-label="Bookmark">${bm?ICON.bmOn:ICON.bm}</button>
         <button class="ab wa" data-act="wa" aria-label="WhatsApp">${ICON.wa}</button>
         <button class="ab" data-act="share" aria-label="Share">${ICON.share}</button>
+        ${likeBtn(n)}
       </div>
     </div>
     <div class="body">
@@ -280,6 +302,7 @@ function onCardClick(e){
   if(act === "bm") toggleBookmark(n);
   if(act === "wa") shareWhatsApp(n);
   if(act === "share") shareNative(n);
+  if(act === "like") toggleLike(n, a);
   if(act === "open") openSource(n);
   if(act === "video") openVideo(n);
 }
