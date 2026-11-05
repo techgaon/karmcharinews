@@ -145,10 +145,42 @@ async function bingImage(title) {   // Bing News thumbnail for the same headline
   } catch (e) { log("   bing:", e.message); }
   return "";
 }
+const isArticle = u => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) && !/google\.|vertexaisearch/.test(x.hostname) && x.pathname.replace(/\/+$/, "").length > 12; } catch (e) { return false; } };
+async function bingLink(title) {
+  try {
+    const xml = await fetch("https://www.bing.com/news/search?format=rss&mkt=en-IN&q=" + encodeURIComponent(title.slice(0, 120)), { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(12000) }).then(r => r.ok ? r.text() : "");
+    for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
+      if (similar(tag(m[1], "title"), title) < 0.5) continue;
+      let l = tag(m[1], "link"); const q = l.match(/[?&]url=([^&]+)/); if (q) l = decodeURIComponent(q[1]);
+      if (isArticle(l)) { log("   article: link found via Bing"); return l; }
+    }
+  } catch (e) {}
+  return "";
+}
+async function prefetch(it) {   // resolve the real article URL and read its text ourselves, so Gemini needs no browsing tool
+  if (it.video) return;
+  let u = await realUrl(it.link);
+  if (!isArticle(u)) u = await bingLink(it.title);   // fallback: find the same headline on Bing News
+  if (!isArticle(u)) { log("   article: could not resolve Google News link"); return; }
+  it.realUrl = u;
+  try {
+    const r = await fetch(u, { headers: { "User-Agent": UA, "Accept": "text/html,application/xhtml+xml", "Accept-Language": "hi-IN,hi;q=0.9,en;q=0.8" }, redirect: "follow", signal: AbortSignal.timeout(15000) });
+    if (!r.ok) { log("   article: HTTP", r.status, new URL(u).hostname); return; }
+    const html = (await r.text()).slice(0, 600000);
+    const og = html.match(/<meta[^>]+(?:property|name)=["'](?:og:image(?::secure_url)?|twitter:image(?::src)?)["'][^>]*content=["']([^"']+)["']/i) || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["'](?:og:image|twitter:image)["']/i);
+    if (og) { let img = og[1].replace(/&amp;/g, "&"); if (img.startsWith("//")) img = "https:" + img; else if (img.startsWith("/")) img = new URL(img, u).href;
+      if (/^https:\/\//.test(img) && !/logo|default|placeholder|favicon|icon[-_.]|\/icons?\/|sprite|\.svg(\?|$)/i.test(img)) it.ogImage = img; }
+    const body = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<noscript[\s\S]*?<\/noscript>/gi, " ");
+    const paras = [...body.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)].map(m => unxml(m[1])).filter(t => t.length > 40 && !/cookie|subscribe|download app|©/i.test(t));
+    const text = paras.join("\n").slice(0, 9000);
+    if (text.length > 400) it.text = text;
+    log("   article:", new URL(u).hostname, it.text ? it.text.length + " chars" : "no text", it.ogImage ? "+ photo" : "");
+  } catch (e) { log("   article:", e.message); }
+}
 async function findImage(it, o) {
   if (it.video) { const v = (it.link.split("v=")[1] || "").slice(0, 11); return v ? `https://i.ytimg.com/vi/${v}/hqdefault.jpg` : ""; }
-  const isArticle = u => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) && !/google\.|vertexaisearch/.test(x.hostname) && x.pathname.replace(/\/+$/, "").length > 12; } catch (e) { return false; } };
-  let url = isArticle(o.articleUrl) ? o.articleUrl : "";
+  if (it.ogImage) { log("  image: found (article)"); return it.ogImage; }
+  let url = it.realUrl || (isArticle(o.articleUrl) ? o.articleUrl : "");
   if (!url) { const r = await realUrl(it.link); if (isArticle(r)) url = r; }
   if (url) it.realUrl = url;
   let img = url ? await ogImage(url) : "", from = "article";
@@ -170,7 +202,11 @@ function fit(s) { const w = String(s || "").trim().split(/\s+/).filter(Boolean);
 function prompt(it) {
   return `You are the news editor of "Karmchari News", an Inshorts-style app for Indian government employees (Panchayati Raj, teachers/education, revenue/Lekhpal, police/Home Guard, health/ASHA/Anganwadi, finance/DA/pay/pension, all employees).
 Article: "${it.title}" — published by ${it.source || "unknown"} on ${it.date || "unknown date"}.
-Link: ${it.link}
+Link: ${it.realUrl || it.link}${it.text ? `
+ARTICLE TEXT (fetched from the publisher; this is the article — read it, it counts as reading the article):
+"""
+${it.text}
+"""` : ""}
 Steps:
 1. Open the link (or search the web for this exact headline from this publisher) and READ the actual article.
 2. Decide "relevant": true ONLY if the story directly matters to government employees/pensioners/workers in India (pay, DA, pension, transfers, recruitment of govt staff, service rules, GOs, departmental orders, strikes/demands, training, duties). Crime, politics, sports, celebrity, generic schemes for public = false.
@@ -194,7 +230,7 @@ async function gemini(it) {
   // try: chosen model with web tools → same model with fewer tools → newest "latest" aliases
   const models = [...new Set([MODEL, ...(CFG.fallbackModels || ["gemini-flash-latest", "gemini-flash-lite-latest"])])];
   // Google Search grounding has its own (often zero) free quota, so it is used only if CFG.useSearch is true
-  const toolSets = it.video ? (CFG.useSearch ? [[{ google_search: {} }], []] : [[]]) : (CFG.useSearch ? [[{ url_context: {} }, { google_search: {} }], [{ url_context: {} }]] : [[{ url_context: {} }]]);
+  const toolSets = it.video ? (CFG.useSearch ? [[{ google_search: {} }], []] : [[]]) : it.text ? [[]] : (CFG.useSearch ? [[{ url_context: {} }, { google_search: {} }], [{ url_context: {} }]] : [[{ url_context: {} }]]);
   let lastErr = "";
   for (const model of models) for (const tools of toolSets) for (let attempt = 1; attempt <= 3; attempt++) {
     const body = { contents: [{ role: "user", parts }], generationConfig: { temperature: 0.2 } };
@@ -252,6 +288,7 @@ function validate(o) {
 const ICON = { panchayat: "🏛️", shiksha: "📚", revenue: "📜", police: "👮", health: "🩺", finance: "💰", all: "📰" };
 
 /* ---------------- main ---------------- */
+const T0 = Date.now();
 async function main() {
   const db = await openDb();
   const app = (await db.get("knConfig", "app")) || {};
@@ -289,7 +326,10 @@ async function main() {
     if (published >= MAX) break;
     if (it.video && videos >= MAXV) continue;
     if (it.video) videos++;
+    if (Date.now() - T0 > (CFG.runBudgetMin || 15) * 60000) { log("time budget used — stopping, next run continues"); break; }
     log("→", it.title.slice(0, 90));
+    await prefetch(it);
+    if (!it.video && !it.text && !it.realUrl) { log("  skip for now: article not readable"); continue; }
     let o;
     try { o = await gemini(it); quotaFails = 0; } catch (e) { log("  AI error:", e.message); if (e.quota && ++quotaFails >= 2) { log("Gemini quota exhausted — stopping this run, will try again next run."); break; } continue; }
     const why = validate(o);
