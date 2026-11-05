@@ -339,7 +339,7 @@ async function main() {
     if (Date.now() - T0 > (CFG.runBudgetMin || 15) * 60000) { log("time budget used — stopping, next run continues"); break; }
     log("→", it.title.slice(0, 90));
     await prefetch(it);
-    if (!it.video && !it.text && !it.realUrl) { log("  skip for now: article not readable"); continue; }
+    if (!it.video && !it.text && !CFG.allowUrlContext) { log("  skip for now: article text not readable (saves Gemini quota)"); continue; }
     let o;
     try { o = await gemini(it); quotaFails = 0; } catch (e) { log("  AI error:", e.message); if (e.quota && ++quotaFails >= 2) { log("Gemini quota exhausted — stopping this run, will try again next run."); break; } continue; }
     const why = validate(o);
