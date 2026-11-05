@@ -16,7 +16,7 @@ const Store = {
   async init(){
     this.cfg = Object.assign(this.cfg, LS.get("kn_cfg", {}));
     if(LIVE){
-      try { await this._initFirebase(); return; }
+      try { await this._initFirebase(); this.countVisit(); return; }
       catch(e){ console.error("Firebase failed, falling back to preview", e); this.live = false; }
     }
     this.user = LS.get("kn_user", null);
@@ -32,7 +32,7 @@ const Store = {
     const over = LS.get("kn_seed_over", {});          // admin edits/deletes of demo cards (preview)
     const seeds = seed.filter(s=>!(over[s.id]&&over[s.id].deleted)).map(s=> over[s.id]? Object.assign({}, s, over[s.id]) : s);
     const all = list.concat(seeds.filter(s=>!list.find(n=>n.id===s.id)));
-    all.sort((a,b)=> (b.pinned?1:0)-(a.pinned?1:0) || new Date(b.ts)-new Date(a.ts));
+    all.sort((a,b)=> (b.pinned?1:0)-(a.pinned?1:0) || KN_time(b)-KN_time(a));
     return all;
   },
   onNews(cb){ this._newsCbs.push(cb); if(this.news.length) cb(this.news); },
@@ -85,6 +85,23 @@ const Store = {
     if(!this.user){ LS.set("kn_guest", {newsLang:cur.newsLang, uiLang:cur.uiLang}); return; }
     LS.set("kn_u_"+this.user.uid, cur);
     if(this.live){ try{ await this._db.collection("knUsers").doc(this.user.uid).set(cur, {merge:true}); }catch(e){ console.warn(e); } }
+  },
+
+  /* ---------- visitor counter (admin-only view) ---------- */
+  countVisit(){
+    try{
+      if(sessionStorage.getItem("kn_vc") || sessionStorage.getItem("kn_admin")) return; sessionStorage.setItem("kn_vc", "1");
+      const day = KN_istDay(), first = localStorage.getItem("kn_vday") !== day; localStorage.setItem("kn_vday", day);
+      const inc = firebase.firestore.FieldValue.increment, data = {v: inc(1), u: inc(first ? 1 : 0)};
+      const col = this._db.collection("knStats");
+      col.doc("d" + day).set(data, {merge:true}).catch(()=>{}); col.doc("total").set(data, {merge:true}).catch(()=>{});
+    }catch(e){}
+  },
+  async visitStats(days){
+    const col = this._db.collection("knStats"), ids = ["total"];
+    for(let i = 0; i < days; i++) ids.push("d" + KN_istDay(-i));
+    const snaps = await Promise.all(ids.map(id => col.doc(id).get()));
+    return snaps.map((s, i) => ({id: ids[i], v: s.exists ? (s.data().v||0) : 0, u: s.exists ? (s.data().u||0) : 0}));
   },
 
   /* ---------- Firebase (live) ---------- */
