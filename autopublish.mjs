@@ -143,8 +143,9 @@ Steps:
 4. If relevant and verified, write ONE card in FOUR languages. Each summary EXACTLY ${WORDS} words, neutral, factual, your own words (do not copy sentences), no invented numbers, dates or names. Write every number in Western digits (0-9) and use EXACTLY the same numbers in all four languages; a number in a headline must also appear in that language's summary. Headline max 14 words.
    "hi" standard Hindi (Devanagari). "en" simple English. "aw" Awadhi in Devanagari (अहै, अउर, मा, खातिर, कहिन). "bh" Bhojpuri in Devanagari (बा, आ, में, खातिर, कहलें).
 5. Tags: vibhag one of panchayat|shiksha|revenue|police|health|finance|all ; state one of UP|Bihar|MP|Rajasthan|Uttarakhand|National ; district = English name of a UP district if the story is about one district, else "All" ; isGO true if it is about a Government Order/Shasanadesh ; sourceName = publisher ; articleUrl = the exact publisher web address of the article you read (not a Google link).
+6. place: ONLY when the story is about a specific local place — give district, block (vikas khand) and gram panchayat names in Hindi (Devanagari) and English. If the article names a gram panchayat but not its block, find its block from reliable sources (lgdirectory.gov.in, the district's official website, or several matching news reports); if you are not certain, leave block empty. Never guess. Leave every place field empty for state-level or national stories.
 Reply with ONLY this JSON (no markdown):
-{"relevant":true,"verified":true,"reason":"","hi":{"h":"","s":""},"en":{"h":"","s":""},"aw":{"h":"","s":""},"bh":{"h":"","s":""},"vibhag":"","state":"","district":"","isGO":false,"sourceName":"","articleUrl":""}`;
+{"relevant":true,"verified":true,"reason":"","hi":{"h":"","s":""},"en":{"h":"","s":""},"aw":{"h":"","s":""},"bh":{"h":"","s":""},"vibhag":"","state":"","district":"","isGO":false,"sourceName":"","articleUrl":"","place":{"district_hi":"","district_en":"","block_hi":"","block_en":"","gp_hi":"","gp_en":""}}`;
 }
 function promptVideo(it) {
   return prompt(it).replace(/Steps:\n1\.[^\n]*\n/, `Steps:
@@ -203,6 +204,13 @@ function validate(o) {
   if (!V.includes(o.vibhag)) o.vibhag = "all";
   if (!S.includes(o.state)) o.state = "UP";
   if (!o.district || !CFG.upDistricts.includes(o.district)) o.district = "All";
+  const P = o.place && typeof o.place === "object" ? o.place : {}, clean = {};
+  for (const k of ["district", "block", "gp"]) {
+    const hi = String(P[k + "_hi"] || "").trim(), en = String(P[k + "_en"] || "").trim();
+    if (hi && hi.length <= 40 && /[\u0900-\u097F]/.test(hi) && !/[a-z]/i.test(hi)) clean[k + "_hi"] = hi;
+    if (en && en.length <= 40 && /^[A-Za-z .()'-]+$/.test(en)) clean[k + "_en"] = en;
+  }
+  o.place = clean;
   return "";
 }
 const ICON = { panchayat: "🏛️", shiksha: "📚", revenue: "📜", police: "👮", health: "🩺", finance: "💰", all: "📰" };
@@ -256,6 +264,7 @@ async function main() {
       icon: it.video ? "🎬" : o.isGO ? "📄" : ICON[o.vibhag], source: it.video ? it.source : (o.sourceName || it.source || "News"), sourceUrl: it.realUrl || it.link,
       isGO: !!o.isGO, pinned: false, isDemo: false, ai: true, auto: true, origTitle: it.title,
       ts: new Date().toISOString(), pubDate: it.date || "",
+      place: o.place || {},
       lang: { hi: o.hi, en: o.en, aw: o.aw, bh: o.bh }
     };
     await db.set("knNews", it.id, doc); published++;
