@@ -268,12 +268,11 @@ textarea.inp{resize:vertical;min-height:84px;line-height:1.5}
 .vb em{position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-style:normal;font-size:9px;font-weight:700;color:var(--navy)}
 .vb small{font-size:8.5px;color:var(--ink2);margin-top:3px;white-space:nowrap}
 
-/* like ❤️ (above Read Full Article) */
-.meta .ab.like{margin-left:auto;flex:none;height:32px}
-.ab.like{position:relative;width:auto;min-width:36px;padding:0 11px;border-radius:999px;gap:4px;display:flex;align-items:center;justify-content:center;color:#e11d48;background:#fff1f2;border:1px solid #fecdd3;overflow:visible}
-.ab.like svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;transition:transform .2s}
+/* like ❤️ */
+.ab.like{position:relative;width:auto;min-width:36px;padding:0 9px;border-radius:999px;gap:3px;display:flex;align-items:center;justify-content:center;color:#e11d48;background:#fff1f2;overflow:visible}
+.ab.like svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;transition:transform .2s}
 .ab.like.on svg{fill:#e11d48;stroke:#e11d48}
-.ab.like .lc{font-family:var(--lat);font-size:12px;font-weight:800;line-height:1}
+.ab.like .lc{font-family:var(--lat);font-size:11.5px;font-weight:800;line-height:1}
 .ab.like .lc:empty{display:none}
 .ab.like.on{background:#ffe4e6}
 .ab.like:not(.on) svg{animation:beat 2.4s ease-in-out infinite}
@@ -287,3 +286,42 @@ textarea.inp{resize:vertical;min-height:84px;line-height:1.5}
 .bigheart{position:absolute;left:50%;top:28%;width:110px;height:110px;margin-left:-55px;pointer-events:none;z-index:6;animation:bigheart .9s ease-out forwards}
 .bigheart svg{width:100%;height:100%;fill:#fff;filter:drop-shadow(0 6px 18px rgba(225,29,72,.6))}
 @keyframes bigheart{0%{transform:scale(0);opacity:0}25%{transform:scale(1.15);opacity:1}45%{transform:scale(.95)}75%{transform:scale(1);opacity:1}100%{transform:scale(1.3) translateY(-30px);opacity:0}}
+.acts{gap:3px}
+@media (max-width:380px){.ab.like{padding:0 7px;min-width:33px}}
+.meta .ab.like{margin-left:auto;height:32px;flex:none}
+
+/* v7 compact layout: thinner bars, slightly smaller photo, bigger text */
+#topbar{height:46px}
+.media{height:37%}
+.meta{padding-top:4px;font-size:11px}
+.meta .place{padding:2px 8px}
+.meta .ab.like{height:34px;min-width:40px;padding:0 11px}
+.meta .ab.like svg{width:21px;height:21px}
+.meta .ab.like .lc{font-size:12.5px}
+.body h2{font-size:calc(var(--fs) * 1.27)}
+.sum{font-size:calc(var(--fs) * 1.07)}
+.meta .place{display:inline-flex;align-items:center;gap:4px}.meta .place .pin{width:14px;height:14px;flex:none;filter:drop-shadow(0 1px 1px rgba(0,0,0,.25))}
+
+/* ---------- first-run tour ---------- */
+#tour{position:fixed;inset:0;z-index:200;opacity:0;transition:opacity .3s}
+#tour.on{opacity:1}#tour.bye{opacity:0}
+.t-hole{position:fixed;box-shadow:0 0 0 200vmax rgba(5,15,35,.78);transition:all .45s cubic-bezier(.2,.8,.2,1);pointer-events:none}
+.t-hole.ring::after{content:"";position:absolute;inset:-6px;border-radius:inherit;border:2.5px solid #ffb347;animation:tring 1.4s ease-out infinite}
+@keyframes tring{0%{transform:scale(.92);opacity:1}100%{transform:scale(1.25);opacity:0}}
+.t-tip{position:fixed;left:14px;right:14px;max-width:420px;margin:0 auto;background:#fff;border-radius:18px;padding:14px 15px 12px;box-shadow:0 14px 40px rgba(0,0,0,.4);
+  font-family:var(--dev),var(--lat);opacity:0;transform:translateY(12px) scale(.96);transition:top .45s cubic-bezier(.2,.8,.2,1)}
+.t-tip.show{animation:tipIn .4s cubic-bezier(.2,1.3,.4,1) forwards}
+@keyframes tipIn{to{opacity:1;transform:none}}
+.t-tip.up::before,.t-tip.down::after{content:"";position:absolute;left:calc(var(--ax) - 14px);width:16px;height:16px;background:#fff;transform:rotate(45deg)}
+.t-tip.up::before{top:-7px}.t-tip.down::after{bottom:-7px}
+.t-tip b{display:block;font-size:17px;color:var(--navy);margin-bottom:5px}
+.t-tip p{margin:0 0 4px;font-size:14.5px;line-height:1.5;color:#374151}.t-tip p.en{font-family:var(--lat);font-size:12px;color:#6b7280}
+.t-foot{display:flex;align-items:center;gap:8px;margin-top:10px}
+.t-dots{flex:1;display:flex;gap:4px}.t-dots i{width:6px;height:6px;border-radius:9px;background:#d1d5db;transition:all .3s}.t-dots i.on{width:18px;background:var(--saffron)}
+.t-btn{border-radius:999px;padding:8px 15px;font-weight:800;font-size:13.5px;font-family:var(--dev),var(--lat)}
+.t-btn.go{background:linear-gradient(90deg,var(--saffron),#ff4d00);color:#fff;box-shadow:0 4px 12px rgba(255,122,0,.4)}
+.t-btn.ghost{background:#f1f5f9;color:var(--navy)}
+.t-hand{position:fixed;left:50%;top:44%;font-size:46px;margin-left:-23px;display:none;filter:drop-shadow(0 4px 8px rgba(0,0,0,.5));animation:thand 1.6s ease-in-out infinite;pointer-events:none}
+@keyframes thand{0%{transform:translateY(70px);opacity:0}20%{opacity:1}70%{transform:translateY(-70px);opacity:1}100%{transform:translateY(-90px);opacity:0}}
+.t-conf{position:fixed;top:-12px;width:8px;height:12px;border-radius:2px;animation:tconf 1.8s ease-in forwards}
+@keyframes tconf{to{transform:translateY(105vh) rotate(var(--r));opacity:.9}}
