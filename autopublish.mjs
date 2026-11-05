@@ -63,9 +63,26 @@ async function channelId(x) {
   if (!m) throw new Error("channel id not found for " + h);
   return m[1];
 }
+async function ytFromPage(ch) {   // fallback when YouTube's RSS feed is blocked: read the channel's /videos page
+  const id = await channelId(ch.id);
+  const html = await fetch(`https://www.youtube.com/channel/${id}/videos?hl=en&gl=IN`, { headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9", "Cookie": "CONSENT=YES+1" }, signal: AbortSignal.timeout(15000) }).then(r => { if (!r.ok) throw new Error("page HTTP " + r.status); return r.text(); });
+  const out = [], seen = new Set();
+  for (const m of html.matchAll(/"videoId":"([\w-]{11})"[\s\S]{0,1500}?"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"\}[\s\S]{0,800}?"publishedTimeText":\{"simpleText":"([^"]+)"/g)) {
+    if (seen.has(m[1])) continue; seen.add(m[1]);
+    const ago = m[3], n = +(ago.match(/\d+/) || [0])[0];
+    const mins = /minute/.test(ago) ? n : /hour/.test(ago) ? n * 60 : /day/.test(ago) ? n * 1440 : /week/.test(ago) ? n * 10080 : 1e9;
+    out.push({ title: JSON.parse('"' + m[2] + '"'), link: "https://www.youtube.com/watch?v=" + m[1], date: new Date(Date.now() - mins * 60000).toUTCString(), source: "YouTube — " + ch.name, video: true, channel: ch.name });
+    if (out.length >= 15) break;
+  }
+  if (!out.length) throw new Error("no videos found on page");
+  return out;
+}
 async function readYouTube(ch) {
-  const xml = MOCK ? fs.readFileSync(new URL("./mock/yt.xml", import.meta.url), "utf8")
-    : await fetch("https://www.youtube.com/feeds/videos.xml?channel_id=" + await channelId(ch.id)).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); });
+  let xml;
+  try {
+    xml = MOCK ? fs.readFileSync(new URL("./mock/yt.xml", import.meta.url), "utf8")
+      : await fetch("https://www.youtube.com/feeds/videos.xml?channel_id=" + await channelId(ch.id), { headers: { "User-Agent": UA } }).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); });
+  } catch (e) { log("  youtube rss", ch.name || ch.id, e.message, "→ trying channel page"); return await ytFromPage(ch); }
   const chName = tag(xml, "title") || ch.name;
   return [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)].map(m => {
     const x = m[1], vid = tag(x, "yt:videoId");
@@ -90,24 +107,29 @@ async function realUrl(link) {   // Google News RSS link -> publisher article UR
 }
 async function ogImage(url) {   // og:image / twitter:image of the article page
   try {
-    const html = await fetch(url, { headers: { "User-Agent": UA, "Accept-Language": "hi,en" }, redirect: "follow", signal: AbortSignal.timeout(12000) }).then(r => r.ok ? r.text() : "");
+    const r0 = await fetch(url, { headers: { "User-Agent": UA, "Accept": "text/html,application/xhtml+xml", "Accept-Language": "hi-IN,hi;q=0.9,en;q=0.8" }, redirect: "follow", signal: AbortSignal.timeout(12000) });
+    if (!r0.ok) { log("   og: HTTP", r0.status, new URL(url).hostname); return ""; }
+    const html = (await r0.text()).slice(0, 400000);
     const m = html.match(/<meta[^>]+(?:property|name)=["'](?:og:image(?::secure_url)?|twitter:image(?::src)?)["'][^>]*content=["']([^"']+)["']/i)
       || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["'](?:og:image|twitter:image)["']/i);
-    if (!m) return "";
+    if (!m) { log("   og: no og:image tag on", new URL(url).hostname); return ""; }
     let img = m[1].replace(/&amp;/g, "&");
     if (img.startsWith("//")) img = "https:" + img; else if (img.startsWith("/")) img = new URL(img, url).href;
     if (!/^https:\/\//.test(img) || /logo|default|placeholder|favicon|icon[-_.]|\/icons?\/|sprite|\.svg(\?|$)/i.test(img)) return "";
     return img;
-  } catch (e) { return ""; }
+  } catch (e) { log("   og:", e.message); return ""; }
 }
 async function bingImage(title) {   // Bing News thumbnail for the same headline (served by Bing)
   try {
-    const xml = await fetch("https://www.bing.com/news/search?format=rss&setlang=hi&q=" + encodeURIComponent(title.slice(0, 120)), { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(12000) }).then(r => r.ok ? r.text() : "");
-    for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
+    const r0 = await fetch("https://www.bing.com/news/search?format=rss&mkt=en-IN&q=" + encodeURIComponent(title.slice(0, 120)), { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(12000) });
+    const xml = r0.ok ? await r0.text() : "";
+    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
+    log("   bing:", r0.status, items.length, "items,", (xml.match(/News:Image/gi) || []).length / 2, "images");
+    for (const m of items) {
       const x = m[1], t = tag(x, "title"), im = (x.match(/<News:Image>([^<]+)<\/News:Image>/i) || [])[1];
-      if (im && similar(t, title) > 0.5) return unxml(im).replace(/^http:/, "https:");
+      if (im && similar(t, title) > 0.35) return unxml(im).replace(/^http:/, "https:").replace(/&pid=News.*$/, "&pid=News&w=800&h=450&c=14");
     }
-  } catch (e) {}
+  } catch (e) { log("   bing:", e.message); }
   return "";
 }
 async function findImage(it, o) {
