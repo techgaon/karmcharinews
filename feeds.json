@@ -59,6 +59,18 @@
   {
    "name": "Bihar employees",
    "url": "https://news.google.com/rss/search?q=%E0%A4%AC%E0%A4%BF%E0%A4%B9%E0%A4%BE%E0%A4%B0%20%E0%A4%B8%E0%A4%B0%E0%A4%95%E0%A4%BE%E0%A4%B0%E0%A5%80%20%E0%A4%95%E0%A4%B0%E0%A5%8D%E0%A4%AE%E0%A4%9A%E0%A4%BE%E0%A4%B0%E0%A5%80%20when%3A2d&hl=hi&gl=IN&ceid=IN:hi"
+  },
+  {
+   "name": "Digital: The Lallantop",
+   "url": "https://news.google.com/rss/search?q=site%3Athelallantop.com%20%28%E0%A4%95%E0%A4%B0%E0%A5%8D%E0%A4%AE%E0%A4%9A%E0%A4%BE%E0%A4%B0%E0%A5%80%20OR%20%E0%A4%95%E0%A4%B0%E0%A5%8D%E0%A4%AE%E0%A4%9A%E0%A4%BE%E0%A4%B0%E0%A4%BF%E0%A4%AF%E0%A5%8B%E0%A4%82%20OR%20%E0%A4%B6%E0%A4%BF%E0%A4%95%E0%A5%8D%E0%A4%B7%E0%A4%95%20OR%20%E0%A4%AA%E0%A5%87%E0%A4%82%E0%A4%B6%E0%A4%A8%20OR%20%E0%A4%B5%E0%A5%87%E0%A4%A4%E0%A4%A8%20OR%20%E0%A4%AE%E0%A4%B9%E0%A4%82%E0%A4%97%E0%A4%BE%E0%A4%88%20%E0%A4%AD%E0%A4%A4%E0%A5%8D%E0%A4%A4%E0%A4%BE%20OR%20%E0%A4%B8%E0%A4%82%E0%A4%B5%E0%A4%BF%E0%A4%A6%E0%A4%BE%20OR%20%E0%A4%A4%E0%A4%AC%E0%A4%BE%E0%A4%A6%E0%A4%B2%E0%A4%BE%29%20when%3A2d&hl=hi&gl=IN&ceid=IN:hi"
+  },
+  {
+   "name": "Digital: NBT / Newstrack / Prabhasakshi / OneIndia",
+   "url": "https://news.google.com/rss/search?q=%28site%3Anavbharattimes.indiatimes.com%20OR%20site%3Anewstrack.com%20OR%20site%3Aprabhasakshi.com%20OR%20site%3Ahindi.oneindia.com%29%20%28%E0%A4%95%E0%A4%B0%E0%A5%8D%E0%A4%AE%E0%A4%9A%E0%A4%BE%E0%A4%B0%E0%A5%80%20OR%20%E0%A4%95%E0%A4%B0%E0%A5%8D%E0%A4%AE%E0%A4%9A%E0%A4%BE%E0%A4%B0%E0%A4%BF%E0%A4%AF%E0%A5%8B%E0%A4%82%20OR%20%E0%A4%B6%E0%A4%BF%E0%A4%95%E0%A5%8D%E0%A4%B7%E0%A4%95%20OR%20%E0%A4%AA%E0%A5%87%E0%A4%82%E0%A4%B6%E0%A4%A8%20OR%20%E0%A4%B5%E0%A5%87%E0%A4%A4%E0%A4%A8%20OR%20%E0%A4%AE%E0%A4%B9%E0%A4%82%E0%A4%97%E0%A4%BE%E0%A4%88%20%E0%A4%AD%E0%A4%A4%E0%A5%8D%E0%A4%A4%E0%A4%BE%20OR%20%E0%A4%B8%E0%A4%82%E0%A4%B5%E0%A4%BF%E0%A4%A6%E0%A4%BE%20OR%20%E0%A4%A4%E0%A4%AC%E0%A4%BE%E0%A4%A6%E0%A4%B2%E0%A4%BE%29%20when%3A2d&hl=hi&gl=IN&ceid=IN:hi"
+  },
+  {
+   "name": "TV portals: NDTV / ABP / Zee / TV9 / News24",
+   "url": "https://news.google.com/rss/search?q=%28site%3Andtv.in%20OR%20site%3Aabplive.com%20OR%20site%3Azeenews.india.com%20OR%20site%3Atv9hindi.com%20OR%20site%3Anews24online.com%29%20%28%E0%A4%95%E0%A4%B0%E0%A5%8D%E0%A4%AE%E0%A4%9A%E0%A4%BE%E0%A4%B0%E0%A5%80%20OR%20%E0%A4%95%E0%A4%B0%E0%A5%8D%E0%A4%AE%E0%A4%9A%E0%A4%BE%E0%A4%B0%E0%A4%BF%E0%A4%AF%E0%A5%8B%E0%A4%82%20OR%20%E0%A4%B6%E0%A4%BF%E0%A4%95%E0%A5%8D%E0%A4%B7%E0%A4%95%20OR%20%E0%A4%AA%E0%A5%87%E0%A4%82%E0%A4%B6%E0%A4%A8%20OR%20%E0%A4%B5%E0%A5%87%E0%A4%A4%E0%A4%A8%20OR%20%E0%A4%AE%E0%A4%B9%E0%A4%82%E0%A4%97%E0%A4%BE%E0%A4%88%20%E0%A4%AD%E0%A4%A4%E0%A5%8D%E0%A4%A4%E0%A4%BE%20OR%20%E0%A4%B8%E0%A4%82%E0%A4%B5%E0%A4%BF%E0%A4%A6%E0%A4%BE%20OR%20%E0%A4%A4%E0%A4%AC%E0%A4%BE%E0%A4%A6%E0%A4%B2%E0%A4%BE%29%20when%3A2d&hl=hi&gl=IN&ceid=IN:hi"
   }
  ],
  "keywords": [
@@ -221,6 +233,16 @@
   {
    "name": "P N News 51",
    "id": "UCDXHCZJFU-qYcUUrgp5umaQ"
+  },
+  {
+   "name": "The Lallantop",
+   "id": "@TheLallantop",
+   "trusted": true
+  },
+  {
+   "name": "News Pinch",
+   "id": "@TheNewsPinch",
+   "trusted": true
   }
  ],
  "maxVideosPerRun": 3
