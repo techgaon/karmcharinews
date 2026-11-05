@@ -87,6 +87,16 @@ const Store = {
     if(this.live){ try{ await this._db.collection("knUsers").doc(this.user.uid).set(cur, {merge:true}); }catch(e){ console.warn(e); } }
   },
 
+  /* ---------- likes ---------- */
+  _likes: {}, _likeAdj: {},
+  likes(id){ return Math.max(0, (this._likes[id] || 0) + (this._likeAdj[id] || 0)); },
+  like(id, d){
+    if(!this.live){ this._likes[id] = (this._likes[id] || 0) + d; return; }
+    this._likeAdj[id] = (this._likeAdj[id] || 0) + d;   // show instantly, server value arrives via listener
+    const ref = this._db.collection("knLikes").doc(id), inc = firebase.firestore.FieldValue.increment;
+    ref.update({c: inc(d)}).catch(() => d > 0 ? ref.set({c: 1}).catch(()=>{}) : 0);
+  },
+
   /* ---------- visitor counter (admin-only view) ---------- */
   countVisit(){
     try{
@@ -111,6 +121,10 @@ const Store = {
     firebase.initializeApp(C.firebase);
     this._auth = firebase.auth(); this._db = firebase.firestore();
     this._db.collection("knConfig").doc("app").onSnapshot(d=>{ if(d.exists){ Object.assign(this.cfg, d.data()); this._emitNews(); } }, ()=>{});
+    this._db.collection("knLikes").onSnapshot(s=>{
+      s.docChanges().forEach(ch => { this._likes[ch.doc.id] = ch.doc.data().c || 0; delete this._likeAdj[ch.doc.id]; });
+      document.querySelectorAll(".card[data-id] .like .lc").forEach(el => { const id = el.closest(".card").dataset.id; const c = this.likes(id); el.textContent = c ? (c >= 1000 ? (c/1000).toFixed(1) + "K" : c) : ""; });
+    }, ()=>{});
     this._db.collection("knNews").orderBy("ts","desc").limit(300).onSnapshot(s=>{
       this._liveList = s.docs.map(d=>Object.assign({id:d.id}, d.data())); this._emitNews(this._liveList);
     }, e=>console.warn("news read", e));
