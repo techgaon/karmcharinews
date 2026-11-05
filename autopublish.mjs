@@ -192,6 +192,16 @@ async function findImage(it, o) {
 /* ---------------- filters ---------------- */
 const norm = s => s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(w => w.length > 1);
 function similar(a, b) { const A = new Set(norm(a)), B = new Set(norm(b)); if (!A.size || !B.size) return 0; let i = 0; A.forEach(w => B.has(w) && i++); return i / Math.min(A.size, B.size); }
+const DSTOP = new Set("the of and to in for on a an is are was were has have will be by with from at as that this its their it said also government employees employee state".split(" "));
+const keyw = s => new Set(norm(s || "").filter(w => !DSTOP.has(w)));
+function ovl(a, b) { const A = keyw(a), B = keyw(b); if (!A.size || !B.size) return 0; let i = 0; A.forEach(w => B.has(w) && i++); return i / Math.min(A.size, B.size); }
+/* same event already covered? (two papers, two different headlines) */
+function isDup(a, b) {
+  const ea = a.lang?.en || a.en, eb = b.lang?.en || b.en; if (!ea?.h || !eb?.h) return false;
+  if (a.vibhag !== b.vibhag) return false;
+  const ta = Date.parse(a.ts) || Date.now(), tb = Date.parse(b.ts) || Date.now(); if (Math.abs(ta - tb) > 72 * 3600e3) return false;
+  return ovl(ea.h, eb.h) >= 0.45 || ovl(ea.h + " " + ea.s, eb.h + " " + eb.s) >= 0.33;
+}
 const idOf = t => "a" + crypto.createHash("sha1").update(norm(t).join(" ")).digest("hex").slice(0, 16);
 const kwHit = (t, k) => /^[a-z0-9 ]{1,4}$/i.test(k) ? new RegExp(`(^|[^a-z])${k}([^a-z]|$)`, "i").test(t) : t.toLowerCase().includes(k.toLowerCase());
 const relevantByWords = t => CFG.keywords.some(k => kwHit(t, k)) && !CFG.blockWords.some(k => kwHit(t, k));
@@ -335,6 +345,8 @@ async function main() {
     const why = validate(o);
     await db.set("knSeen", it.id, { ts: new Date().toISOString(), title: it.title, result: why || "published" });
     if (why) { skipped++; log("  skip:", why); continue; }
+    const twin = recent.find(r => isDup({ vibhag: o.vibhag, en: o.en, ts: new Date().toISOString() }, r));
+    if (twin) { skipped++; log("  skip: same news already published —", (twin.lang?.hi?.h || "").slice(0, 60)); continue; }
     const doc = {
       id: it.id, vibhag: o.vibhag, state: o.state, district: o.district, type: it.video ? "video" : "image", image: await findImage(it, o), youtube: it.video ? it.link : "",
       icon: it.video ? "🎬" : o.isGO ? "📄" : ICON[o.vibhag], source: it.video ? it.source : (o.sourceName || it.source || "News"), sourceUrl: it.realUrl || it.link,
@@ -343,7 +355,7 @@ async function main() {
       place: o.place || {},
       lang: { hi: o.hi, en: o.en, aw: o.aw, bh: o.bh }
     };
-    await db.set("knNews", it.id, doc); published++;
+    await db.set("knNews", it.id, doc); published++; recent.unshift(doc);
     log(`  ✓ published [${o.vibhag}/${o.state}/${o.district}] ${o.hi.h}`, DRY ? "(dry run)" : "");
     await new Promise(s => setTimeout(s, MOCK ? 0 : 4000));
   }
@@ -354,6 +366,16 @@ async function main() {
     const np = numbersProblem({ hi: n.lang.hi, en: n.lang.en, aw: n.lang.aw || { h: "", s: "" }, bh: n.lang.bh || { h: "", s: "" } });
     if (np) { await db.del("knNews", n.id); log("  removed old story (numbers mismatch):", n.lang.hi.h, "—", np); continue; }
     if (n.image && /logo|favicon|icon[-_.]|\/icons?\//i.test(n.image)) { const c = { ...n }; delete c.id; c.image = ""; await db.set("knNews", n.id, c); log("  cleared logo image:", n.lang.hi.h); }
+  }
+  // 4a-2. remove duplicate stories (keep the one with photo/place, else the newer)
+  if (!MOCK) {
+    const list = (await db.recent("knNews", 60)).filter(n => n.auto && n.lang?.en);
+    const gone = new Set(), score = n => (n.image ? 2 : 0) + (n.place && (n.place.district_hi || n.place.state_hi) ? 1 : 0);
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const a = list[i], b = list[j]; if (gone.has(a.id) || gone.has(b.id) || !isDup(a, b)) continue;
+      const drop = score(b) > score(a) ? a : b; // list is newest-first, so ties drop the older one
+      gone.add(drop.id); await db.del("knNews", drop.id); log("  removed duplicate:", drop.lang.hi?.h);
+    }
   }
   // 4b. housekeeping: remove auto stories older than N days
   const old = await db.autoOlderThan(new Date(Date.now() - CFG.keepDays * 864e5).toISOString());
