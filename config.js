@@ -4,7 +4,7 @@
    for every user via Firestore). See README.md → "Firebase setup".      */
 window.KN_CONFIG = {
   appName: "Karmchari News",
-  tagline: "News in 60 Sec",
+  tagline: "News in 100 words",
   shareUrl: "https://techgaon.in/karmcharinews/",
 
   // LIVE: FoodGaon Firebase project (petpyaar-a3ea6). Empty apiKey = preview mode.
