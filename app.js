@@ -100,20 +100,41 @@ function ago(ts){
   if(m < 1440) return t("hr_ago", Math.floor(m/60));
   return d.toLocaleDateString(S.uiLang==="en" ? "en-IN" : "hi-IN", {day:"numeric", month:"short", year: d.getFullYear()===new Date().getFullYear() ? undefined : "numeric"});
 }
-/* 📍 place line: "बाराबंकी के बनीकोडर ब्लॉक की कुशफर ग्राम पंचायत में" */
+/* 📍 place line, e.g. "बाराबंकी के बनीकोडर ब्लॉक की कुशफर ग्राम पंचायत की ख़बर" / "मध्य प्रदेश के दतिया ज़िले की ख़बर" */
+const PL = {
+  hi: {m:"के", f:"की", gp:"ग्राम पंचायत", bl:"ब्लॉक", dz:"ज़िले", nw:"ख़बर"},
+  aw: {m:"के", f:"कै", gp:"ग्राम पंचायत", bl:"ब्लॉक", dz:"जिला", nw:"खबर"},
+  bh: {m:"के", f:"के", gp:"ग्राम पंचायत", bl:"ब्लॉक", dz:"जिला", nw:"खबर"}
+};
 function placeLine(n, l){
   const p = n.place || {}, en = l === "en";
-  const d = en ? (p.district_en || (n.district && n.district !== "All" ? n.district : "")) : (p.district_hi || (n.district && n.district !== "All" ? KN_distName(n.district, "hi") : ""));
+  const up = n.state === "UP" || /uttar pradesh/i.test(p.state_en || "") || /उत्तर प्रदेश/.test(p.state_hi || "");
+  const dist = n.district && n.district !== "All" ? n.district : "";
+  const d = en ? (p.district_en || dist) : (p.district_hi || (dist ? KN_distName(dist, "hi") : ""));
   const b = en ? p.block_en : p.block_hi, g = en ? p.gp_en : p.gp_hi;
-  if(!d && !b && !g) return "";
-  const T = {
-    hi: [`${d} के ${b} ब्लॉक की ${g} ग्राम पंचायत में`, `${d} के ${b} ब्लॉक में`, `${d} की ${g} ग्राम पंचायत में`, `${d} ज़िले में`],
-    aw: [`${d} के ${b} ब्लॉक कै ${g} ग्राम पंचायत मा`, `${d} के ${b} ब्लॉक मा`, `${d} कै ${g} ग्राम पंचायत मा`, `${d} जिला मा`],
-    bh: [`${d} के ${b} ब्लॉक के ${g} ग्राम पंचायत में`, `${d} के ${b} ब्लॉक में`, `${d} के ${g} ग्राम पंचायत में`, `${d} जिला में`],
-    en: [`${g} Gram Panchayat, ${b} block, ${d}`, `${b} block, ${d}`, `${g} Gram Panchayat, ${d}`, `${d} district`]
-  }[l] || [];
-  const i = g && b && d ? 0 : b && d ? 1 : g && d ? 2 : d ? 3 : -1;
-  return i < 0 ? "" : T[i];
+  let S = "";
+  if(!up){
+    S = en ? (p.state_en || "") : (p.state_hi || "");
+    if(!S && n.state && !["UP","National","Other"].includes(n.state)) S = KN_stateName(n.state, en ? "en" : "hi");
+  }
+  if(en){
+    if(up){ if(g && b && d) return `${g} Gram Panchayat, ${b} block, ${d}`; if(b && d) return `${b} block, ${d}`; if(g && d) return `${g} Gram Panchayat, ${d}`; if(d) return `${d} district`; return ""; }
+    if(g && d) return `${g} Gram Panchayat, ${d}, ${S}`.replace(/, $/, ""); if(b && d) return `${b} block, ${d}, ${S}`.replace(/, $/, ""); if(d) return `${d} district${S ? ", " + S : ""}`; return S ? `${S}` : "";
+  }
+  const K = PL[l] || PL.hi;
+  if(up){
+    if(g && b && d) return `${d} ${K.m} ${b} ${K.bl} ${K.f} ${g} ${K.gp} ${K.f} ${K.nw}`;
+    if(b && d) return `${d} ${K.m} ${b} ${K.bl} ${K.f} ${K.nw}`;
+    if(g && d) return `${d} ${K.f} ${g} ${K.gp} ${K.f} ${K.nw}`;
+    if(d) return `${d} ${K.dz} ${K.f} ${K.nw}`;
+    return "";
+  }
+  const pre = S ? `${S} ${K.m} ` : "";
+  if(g && d) return `${pre}${d} ${K.f} ${g} ${K.gp} ${K.f} ${K.nw}`;
+  if(b && d) return `${pre}${d} ${K.m} ${b} ${K.bl} ${K.f} ${K.nw}`;
+  if(d) return `${pre}${d} ${K.dz} ${K.f} ${K.nw}`;
+  if(S) return `${S} ${K.f} ${K.nw}`;
+  return "";
 }
 function cardHTML(n){
   const cl = cardLangOf(n), tx = textOf(n, cl), p = Store.prefs();
