@@ -225,3 +225,34 @@ textarea.inp{resize:vertical;min-height:84px;line-height:1.5}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 @media (max-width:380px){.ab{width:33px;height:33px}.ab svg{width:17px;height:17px}.logo img{width:22px;height:22px}}
+
+/* ---------- drawer filters v2 ---------- */
+.dr-body{background:#f4f6fb}
+.fsec{background:#fff;border:1px solid #e6eaf2;border-radius:18px;padding:12px 12px 13px;margin-top:12px;box-shadow:0 2px 10px rgba(11,37,69,.05)}
+.dr-body h4.fh{display:flex;align-items:center;gap:8px;margin:0 0 10px;font-size:13px;letter-spacing:.2px;text-transform:none;color:var(--navy);font-weight:800;font-family:var(--dev),var(--lat)}
+.fh .fi{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-size:15px;background:linear-gradient(135deg,#fff3e6,#ffe0bf)}
+.fh em{margin-left:auto;font-style:normal;font-size:11px;font-weight:700;color:#fff;background:linear-gradient(90deg,var(--saffron),#ff4d00);padding:3px 9px;border-radius:999px;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;animation:popIn .3s both}
+.vgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.vgrid .vc,.vgrid .sc{position:relative;display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:14px;background:#f8fafc;border:1.5px solid #edf0f5;
+  font-family:var(--dev),var(--lat);font-size:12.5px;font-weight:600;color:var(--ink);text-align:left;line-height:1.2;min-height:46px;transition:transform .15s,box-shadow .2s,background .2s}
+.vgrid .vc i,.vgrid .sc i{flex:none;width:30px;height:30px;border-radius:10px;display:grid;place-items:center;font-style:normal;font-size:15px;
+  background:linear-gradient(135deg,var(--c1),var(--c2));color:#fff;box-shadow:0 3px 8px color-mix(in srgb,var(--c1) 35%,transparent)}
+.vgrid .sc i{font-family:var(--lat);font-weight:800;font-size:11.5px;letter-spacing:.3px}
+.vgrid span{min-width:0;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.vgrid .tick{position:absolute;top:-6px;right:-6px;width:19px;height:19px;border-radius:50%;background:#fff;color:var(--c1);font-size:11px;display:none;place-items:center;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+.vgrid button:active{transform:scale(.96)}
+.vgrid button.on{background:linear-gradient(135deg,var(--c1),var(--c2));border-color:transparent;color:#fff;font-weight:800;box-shadow:0 6px 16px color-mix(in srgb,var(--c1) 40%,transparent)}
+.vgrid button.on i{background:rgba(255,255,255,.22);box-shadow:none}
+.vgrid button.on .tick{display:grid;animation:popIn .3s both}
+.vgrid .allv{grid-column:1/-1}
+.srch{display:flex;align-items:center;gap:7px;background:#f1f5f9;border:1.5px solid #e2e8f0;border-radius:14px;padding:0 11px;transition:border-color .2s,background .2s}
+.srch:focus-within{border-color:var(--saffron);background:#fff}
+.srch input{flex:1;border:0;background:none;outline:none;padding:10px 0;font-size:13.5px;min-width:0}
+.srch[hidden]{display:none}
+.fsec .distlist{max-height:210px;margin-top:9px;gap:6px}
+.fsec .distlist button{background:#f8fafc;border:1.5px solid #edf0f5;padding:6px 11px;font-weight:600}
+.fsec .distlist button.on{background:linear-gradient(135deg,var(--saffron),#ff4d00);border-color:transparent;box-shadow:0 4px 12px rgba(255,122,0,.35)}
+.fsec .distlist button.on small{color:#fff;opacity:.8}
+.dnote{margin:0;padding:10px 12px;border-radius:12px;background:#f0fdf4;color:#166534;font-size:12.5px;font-weight:600}
+#drawer.open .fsec{animation:fadeUp .4s both}#drawer.open .fsec:nth-of-type(2){animation-delay:.05s}#drawer.open .fsec:nth-of-type(3){animation-delay:.1s}
+#vibhagChips.vgrid button{border-left-width:1.5px;border-left-color:#edf0f5}#vibhagChips.vgrid button.on{border-left-color:transparent}
