@@ -82,7 +82,8 @@ window.KN_STATES = [
  {id:"MP", n:["Madhya Pradesh","मध्य प्रदेश"]},
  {id:"Rajasthan", n:["Rajasthan","राजस्थान"]},
  {id:"Uttarakhand", n:["Uttarakhand","उत्तराखंड"]},
- {id:"National", n:["National / Central","राष्ट्रीय / केंद्र"]}
+ {id:"National", n:["National / Central","राष्ट्रीय / केंद्र"]},
+ {id:"Other", n:["Other states","अन्य राज्य"]}
 ];
 
 /* All 75 districts of Uttar Pradesh: [English, Hindi] */
