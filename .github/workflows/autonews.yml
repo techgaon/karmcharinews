@@ -17,3 +17,4 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
