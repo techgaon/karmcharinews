@@ -76,11 +76,10 @@ function mediaHTML(n){
   else if(n.type==="video" && yt) inner = artSVG(n) + `<img src="https://i.ytimg.com/vi/${yt}/hqdefault.jpg" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`;
   else inner = artSVG(n);
   if(n.image) inner = artSVG(n) + `<img src="${esc(n.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`;
-  const cl = cardLangOf(n);
-  const dist = n.district && n.district !== "All" ? (cl==="en" ? n.district : KN_distName(n.district, "hi")) : KN_stateName(n.state, cl);
-  const badge = `${esc(KN_vName(n.vibhag, cl, true))} • ${esc(dist)}`;
-  return `<div class="media">${inner}
-    <div class="badges">${n.pinned?`<span class="b pin">⚡ ${t("pinned")}</span>`:""}${n.isGO?`<span class="b go">📄 GO</span>`:""}${n.ai?`<span class="b ai">${t("ai_badge")}</span>`:""}<span class="b cat">${badge}</span></div>
+  const cl = cardLangOf(n), v = KN_vibhag(n.vibhag);
+  const badge = `<span class="b cat" style="--c1:${v.c1};--c2:${v.c2}"><i>${VICON[n.vibhag]||"📰"}</i>${esc(KN_vName(n.vibhag, cl, true))}</span>`;
+  return `<div class="media">${inner}<div class="shade"></div>
+    <div class="badges">${n.pinned?`<span class="b pin">⚡ ${t("pinned")}</span>`:""}${badge}${n.isGO?`<span class="b go">📄 ${cl==="en"?"GO":"शासनादेश"}</span>`:""}</div>
     ${n.isDemo?`<span class="b demo">${t("demo")}</span>`:""}
     ${n.type==="video"?`<button class="play" data-act="video" aria-label="Play">▶</button>`:""}
   </div>`;
@@ -94,10 +93,27 @@ function textOf(n, l){
   const fb = ["hi","en","aw","bh"].find(x => L[x] && L[x].s && !/^\[/.test(L[x].s)) || "hi";
   return {l:fb, ...(L[fb]||{h:"",s:""}), missing:true};
 }
+const VICON = {panchayat:"🏛️", shiksha:"📚", revenue:"📜", police:"👮", health:"🩺", finance:"💰", all:"👥"};
 function ago(ts){
-  const m = Math.max(0, (Date.now() - new Date(ts)) / 60000);
+  const d = new Date(ts), m = Math.max(0, (Date.now() - d) / 60000);
   if(m < 1) return t("just_now"); if(m < 60) return t("min_ago", Math.floor(m));
-  if(m < 1440) return t("hr_ago", Math.floor(m/60)); return t("day_ago", Math.floor(m/1440));
+  if(m < 1440) return t("hr_ago", Math.floor(m/60));
+  return d.toLocaleDateString(S.uiLang==="en" ? "en-IN" : "hi-IN", {day:"numeric", month:"short", year: d.getFullYear()===new Date().getFullYear() ? undefined : "numeric"});
+}
+/* 📍 place line: "बाराबंकी के बनीकोडर ब्लॉक की कुशफर ग्राम पंचायत में" */
+function placeLine(n, l){
+  const p = n.place || {}, en = l === "en";
+  const d = en ? (p.district_en || (n.district && n.district !== "All" ? n.district : "")) : (p.district_hi || (n.district && n.district !== "All" ? KN_distName(n.district, "hi") : ""));
+  const b = en ? p.block_en : p.block_hi, g = en ? p.gp_en : p.gp_hi;
+  if(!d && !b && !g) return "";
+  const T = {
+    hi: [`${d} के ${b} ब्लॉक की ${g} ग्राम पंचायत में`, `${d} के ${b} ब्लॉक में`, `${d} की ${g} ग्राम पंचायत में`, `${d} ज़िले में`],
+    aw: [`${d} के ${b} ब्लॉक कै ${g} ग्राम पंचायत मा`, `${d} के ${b} ब्लॉक मा`, `${d} कै ${g} ग्राम पंचायत मा`, `${d} जिला मा`],
+    bh: [`${d} के ${b} ब्लॉक के ${g} ग्राम पंचायत में`, `${d} के ${b} ब्लॉक में`, `${d} के ${g} ग्राम पंचायत में`, `${d} जिला में`],
+    en: [`${g} Gram Panchayat, ${b} block, ${d}`, `${b} block, ${d}`, `${g} Gram Panchayat, ${d}`, `${d} district`]
+  }[l] || [];
+  const i = g && b && d ? 0 : b && d ? 1 : g && d ? 2 : d ? 3 : -1;
+  return i < 0 ? "" : T[i];
 }
 function cardHTML(n){
   const cl = cardLangOf(n), tx = textOf(n, cl), p = Store.prefs();
@@ -115,11 +131,10 @@ function cardHTML(n){
       </div>
     </div>
     <div class="body">
-      <div class="pill">${LANGS.map(l=>`<button data-lang="${l}" class="${l===cl?"on":""}">${PILL[l]}</button>`).join("")}</div>
       <h2>${esc(tx.h)}</h2>
       <p class="sum">${esc(tx.s)}</p>
       ${tx.missing?`<p class="miss">${t("lang_missing")}</p>`:""}
-      <div class="meta">${ago(n.ts)} · ${esc(KN_stateName(n.state, S.uiLang))}</div>
+      <div class="meta"><span class="time">🕒 ${ago(n.ts)}</span>${(pl => pl ? `<span class="place">📍 ${esc(pl)}</span>` : "")(placeLine(n, tx.l))}</div>
     </div>
     <footer class="src" data-act="${isVid?"video":"open"}">
       <span>${t("published_on")} <b>${src}</b></span><span class="go">${isVid?t("watch_full"):t("read_full")}</span>
@@ -155,6 +170,8 @@ function renderFeed(){
   f.innerHTML = html.join("");
   f.querySelectorAll(".card").forEach(fitCard);
   const cur = S.list[S.idx];
+  const cc = f.querySelector(".card.cur");
+  if(cc && S.lastShown !== (cur ? cur.id : "end")){ cc.classList.add("enter"); S.lastShown = cur ? cur.id : "end"; }
   if(cur) history.replaceState(null, "", "#n="+cur.id); else history.replaceState(null, "", location.pathname);
 }
 function fitCard(c){
@@ -301,7 +318,11 @@ function renderChrome(){
   document.querySelectorAll("[data-ph]").forEach(el => el.placeholder = t(el.dataset.ph));
   const tabKey = {all:"all_news", my:"my_feed", bm:"bookmarks", go:"gos"}[S.tab];
   $("#topTitle").innerHTML = `<span class="tt-main">${t(tabKey)}</span>${activeFilterLabel()}`;
-  $("#topLang").innerHTML = LANGS.map(l=>`<button data-tl="${l}" class="${l===S.newsLang?"on":""}">${PILL[l]}</button>`).join("");
+  $("#moreMenu").innerHTML = `<div class="mm-h">📰 ${t("news_lang")}</div>` +
+    KN_LANGS.map(l=>`<button data-nl="${l.k}" class="${S.newsLang===l.k?"on":""}"><span>${l.label}</span>${S.newsLang===l.k?"✓":""}</button>`).join("") +
+    `<div class="mm-h">🌐 ${t("ui_lang")}</div>` +
+    KN_LANGS.map(l=>`<button data-ui="${l.k}" class="${S.uiLang===l.k?"on":""}"><span>${l.label}</span>${S.uiLang===l.k?"✓":""}</button>`).join("") +
+    `<div class="mm-sep"></div><button data-mm="admin"><span>🔒 ${t("admin_login")}</span></button>`;
   renderDrawer();
 }
 function activeFilterLabel(){
@@ -344,7 +365,16 @@ function bindStatic(){
   $("#btnMenu").onclick = openDrawer; $("#btnClose").onclick = closeDrawer; $("#scrim").onclick = closeDrawer;
   $("#btnLock").onclick = () => window.Admin && Admin.open();
   $("#btnAdmin2").onclick = () => { closeDrawer(); window.Admin && Admin.open(); };
-  $("#topLang").onclick = e => { const b = e.target.closest("[data-tl]"); if(!b) return; S.newsLang = b.dataset.tl; S.cardLang = {}; Store.setPrefs({newsLang:S.newsLang}); renderChrome(); renderFeed(); };
+  const mm = $("#moreMenu");
+  $("#btnMore").onclick = e => { e.stopPropagation(); mm.hidden = !mm.hidden; if(!mm.hidden) mm.classList.remove("pop"), void mm.offsetWidth, mm.classList.add("pop"); };
+  document.addEventListener("click", e => { if(!mm.hidden && !e.target.closest("#moreMenu,#btnMore")) mm.hidden = true; });
+  mm.onclick = e => {
+    const b = e.target.closest("button"); if(!b) return;
+    if(b.dataset.nl){ S.newsLang = b.dataset.nl; S.cardLang = {}; Store.setPrefs({newsLang:S.newsLang}); }
+    else if(b.dataset.ui){ S.uiLang = b.dataset.ui; window.KN_UILANG = S.uiLang; Store.setPrefs({uiLang:S.uiLang}); }
+    else if(b.dataset.mm === "admin"){ mm.hidden = true; window.Admin && Admin.open(); return; }
+    mm.hidden = true; S.lastShown = null; renderChrome(); renderFeed();
+  };
   $("#drawer").addEventListener("click", e => {
     const b = e.target.closest("button"); if(!b) return;
     if(b.dataset.tab !== undefined){
