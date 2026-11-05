@@ -79,7 +79,7 @@ function mediaHTML(n){
   const cl = cardLangOf(n), v = KN_vibhag(n.vibhag);
   const badge = `<span class="b cat" style="--c1:${v.c1};--c2:${v.c2}"><i>${VICON[n.vibhag]||"📰"}</i>${esc(KN_vName(n.vibhag, cl, true))}</span>`;
   return `<div class="media">${inner}<div class="shade"></div>
-    <div class="badges">${n.pinned?`<span class="b pin">⚡ ${t("pinned")}</span>`:""}${badge}${n.isGO?`<span class="b go">📄 ${cl==="en"?"GO":"शासनादेश"}</span>`:""}</div>
+    <div class="badges">${n.pinned?`<span class="b pin">⚡ ${t("pinned")}</span>`:""}${badge}</div>
     ${n.isDemo?`<span class="b demo">${t("demo")}</span>`:""}
     ${n.type==="video"?`<button class="play" data-act="video" aria-label="Play">▶</button>`:""}
   </div>`;
@@ -176,7 +176,7 @@ function cardHTML(n){
       <h2>${esc(tx.h)}</h2>
       <p class="sum">${esc(tx.s)}</p>
       ${tx.missing?`<p class="miss">${t("lang_missing")}</p>`:""}
-      <div class="meta"><span class="time">🕒 ${ago(KN_time(n))}</span>${(pl => pl ? `<span class="place">📍 ${esc(pl)}</span>` : "")(placeLine(n, tx.l))}${likeBtn(n)}</div>
+      <div class="meta"><span class="time">🕒 ${ago(KN_time(n))}</span>${(pl => pl ? `<span class="place"><svg class="pin" viewBox="0 0 24 24"><path d="M12 2C7.6 2 4 5.5 4 9.9 4 15.6 12 22 12 22s8-6.4 8-12.1C20 5.5 16.4 2 12 2z" fill="#EA4335"/><circle cx="12" cy="9.8" r="3.2" fill="#B31412"/></svg>${esc(pl)}</span>` : "")(placeLine(n, tx.l))}${likeBtn(n)}</div>
     </div>
     <footer class="src" data-act="${isVid?"video":"open"}">
       <span>${t("published_on")} <b>${src}</b></span><span class="go">${isVid?t("watch_full"):t("read_full")}</span>
@@ -449,7 +449,7 @@ function renderChrome(){
     KN_LANGS.map(l=>`<button data-nl="${l.k}" class="${S.newsLang===l.k?"on":""}"><span>${l.label}</span>${S.newsLang===l.k?"✓":""}</button>`).join("") +
     `<div class="mm-h">🌐 ${t("ui_lang")}</div>` +
     KN_LANGS.map(l=>`<button data-ui="${l.k}" class="${S.uiLang===l.k?"on":""}"><span>${l.label}</span>${S.uiLang===l.k?"✓":""}</button>`).join("") +
-    `<div class="mm-sep"></div><button data-mm="admin"><span>🔒 ${t("admin_login")}</span></button>`;
+    `<div class="mm-sep"></div><button data-mm="tour"><span>🎓 ${S.uiLang==="en"?"App tour":"ऐप टूर"}</span></button><button data-mm="admin"><span>🔒 ${t("admin_login")}</span></button>`;
   renderDrawer();
 }
 function activeFilterLabel(){
@@ -507,6 +507,7 @@ function bindStatic(){
     const b = e.target.closest("button"); if(!b) return;
     if(b.dataset.nl){ S.newsLang = b.dataset.nl; S.cardLang = {}; Store.setPrefs({newsLang:S.newsLang}); }
     else if(b.dataset.ui){ S.uiLang = b.dataset.ui; window.KN_UILANG = S.uiLang; Store.setPrefs({uiLang:S.uiLang}); }
+    else if(b.dataset.mm === "tour"){ mm.hidden = true; window.KNTour && KNTour.start(); return; }
     else if(b.dataset.mm === "admin"){ mm.hidden = true; window.Admin && Admin.open(); return; }
     mm.hidden = true; S.lastShown = null; renderChrome(); renderFeed();
   };
