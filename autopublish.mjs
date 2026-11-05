@@ -142,10 +142,10 @@ Steps:
 3. "verified": true ONLY if you could read the article or confirm its facts from reliable sources. Never guess.
 4. If relevant and verified, write ONE card in FOUR languages. Each summary EXACTLY ${WORDS} words, neutral, factual, your own words (do not copy sentences), no invented numbers, dates or names. Write every number in Western digits (0-9) and use EXACTLY the same numbers in all four languages; a number in a headline must also appear in that language's summary. Headline max 14 words.
    "hi" standard Hindi (Devanagari). "en" simple English. "aw" Awadhi in Devanagari (अहै, अउर, मा, खातिर, कहिन). "bh" Bhojpuri in Devanagari (बा, आ, में, खातिर, कहलें).
-5. Tags: vibhag one of panchayat|shiksha|revenue|police|health|finance|all ; state one of UP|Bihar|MP|Rajasthan|Uttarakhand|National ; district = English name of a UP district if the story is about one district, else "All" ; isGO true if it is about a Government Order/Shasanadesh ; sourceName = publisher ; articleUrl = the exact publisher web address of the article you read (not a Google link).
-6. place: ONLY when the story is about a specific local place — give district, block (vikas khand) and gram panchayat names in Hindi (Devanagari) and English. If the article names a gram panchayat but not its block, find its block from reliable sources (lgdirectory.gov.in, the district's official website, or several matching news reports); if you are not certain, leave block empty. Never guess. Leave every place field empty for state-level or national stories.
+5. Tags: vibhag one of panchayat|shiksha|revenue|police|health|finance|all ; state one of UP|Bihar|MP|Rajasthan|Uttarakhand|National|Other (Other = any other Indian state) ; district = English name of a UP district if the story is about one district, else "All" ; isGO true if it is about a Government Order/Shasanadesh ; sourceName = publisher ; articleUrl = the exact publisher web address of the article you read (not a Google link).
+6. place: give the state name (Hindi + English) for every state-level or local story (leave empty for all-India/central stories). ONLY when the story is about a specific local place, also give district, block (vikas khand) and gram panchayat names in Hindi (Devanagari) and English. If the article names a gram panchayat but not its block, find its block from reliable sources (lgdirectory.gov.in, the district's official website, or several matching news reports); if you are not certain, leave block empty. Never guess. Leave district/block/gram panchayat empty for state-level stories, and every place field empty for all-India stories.
 Reply with ONLY this JSON (no markdown):
-{"relevant":true,"verified":true,"reason":"","hi":{"h":"","s":""},"en":{"h":"","s":""},"aw":{"h":"","s":""},"bh":{"h":"","s":""},"vibhag":"","state":"","district":"","isGO":false,"sourceName":"","articleUrl":"","place":{"district_hi":"","district_en":"","block_hi":"","block_en":"","gp_hi":"","gp_en":""}}`;
+{"relevant":true,"verified":true,"reason":"","hi":{"h":"","s":""},"en":{"h":"","s":""},"aw":{"h":"","s":""},"bh":{"h":"","s":""},"vibhag":"","state":"","district":"","isGO":false,"sourceName":"","articleUrl":"","place":{"state_hi":"","state_en":"","district_hi":"","district_en":"","block_hi":"","block_en":"","gp_hi":"","gp_en":""}}`;
 }
 function promptVideo(it) {
   return prompt(it).replace(/Steps:\n1\.[^\n]*\n/, `Steps:
@@ -191,7 +191,7 @@ function numbersProblem(o) {
   return "";
 }
 function validate(o) {
-  const V = ["panchayat", "shiksha", "revenue", "police", "health", "finance", "all"], S = ["UP", "Bihar", "MP", "Rajasthan", "Uttarakhand", "National"];
+  const V = ["panchayat", "shiksha", "revenue", "police", "health", "finance", "all"], S = ["UP", "Bihar", "MP", "Rajasthan", "Uttarakhand", "National", "Other"];
   if (!o.relevant) return "not employee news: " + (o.reason || "");
   if (!o.verified) return "could not verify article: " + (o.reason || "");
   for (const l of ["hi", "en", "aw", "bh"]) {
@@ -202,10 +202,10 @@ function validate(o) {
   }
   const np = numbersProblem(o); if (np) return "numbers do not match across languages: " + np;
   if (!V.includes(o.vibhag)) o.vibhag = "all";
-  if (!S.includes(o.state)) o.state = "UP";
+  if (!S.includes(o.state)) o.state = "Other";
   if (!o.district || !CFG.upDistricts.includes(o.district)) o.district = "All";
   const P = o.place && typeof o.place === "object" ? o.place : {}, clean = {};
-  for (const k of ["district", "block", "gp"]) {
+  for (const k of ["state", "district", "block", "gp"]) {
     const hi = String(P[k + "_hi"] || "").trim(), en = String(P[k + "_en"] || "").trim();
     if (hi && hi.length <= 40 && /[\u0900-\u097F]/.test(hi) && !/[a-z]/i.test(hi)) clean[k + "_hi"] = hi;
     if (en && en.length <= 40 && /^[A-Za-z .()'-]+$/.test(en)) clean[k + "_en"] = en;
