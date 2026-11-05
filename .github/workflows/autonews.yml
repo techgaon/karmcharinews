@@ -2,12 +2,21 @@ name: Karmchari News — AI auto-publish
 on:
   schedule:
     - cron: "*/30 * * * *"     # every 30 minutes
-  workflow_dispatch: {}         # "Run workflow" button for a manual run
+  workflow_dispatch:            # "Run workflow" button for a manual run
+    inputs:
+      backfill_from:
+        description: "Purani khabrein is tareekh se (YYYY-MM-DD), khali = normal run"
+        required: false
+        default: ""
+      max_per_run:
+        description: "Is run mein zyada se zyada kitni khabrein"
+        required: false
+        default: "6"
 concurrency: { group: autonews, cancel-in-progress: false }
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,3 +27,6 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          BACKFILL_FROM: ${{ inputs.backfill_from }}
+          MAX_PER_RUN: ${{ inputs.max_per_run || '6' }}
+          RUN_BUDGET_MIN: ${{ inputs.backfill_from && '65' || '15' }}
