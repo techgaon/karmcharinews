@@ -180,23 +180,24 @@ async function gemini(it) {
   const parts = it.video ? [{ file_data: { file_uri: it.link } }, { text: promptVideo(it) }] : [{ text: prompt(it) }];
   // try: chosen model with web tools → same model with fewer tools → newest "latest" aliases
   const models = [...new Set([MODEL, ...(CFG.fallbackModels || ["gemini-flash-latest", "gemini-flash-lite-latest"])])];
-  const toolSets = it.video ? [[{ google_search: {} }], []] : [[{ url_context: {} }, { google_search: {} }], [{ url_context: {} }]];
+  // Google Search grounding has its own (often zero) free quota, so it is used only if CFG.useSearch is true
+  const toolSets = it.video ? (CFG.useSearch ? [[{ google_search: {} }], []] : [[]]) : (CFG.useSearch ? [[{ url_context: {} }, { google_search: {} }], [{ url_context: {} }]] : [[{ url_context: {} }]]);
   let lastErr = "";
-  for (const model of models) for (const tools of toolSets) {
+  for (const model of models) for (const tools of toolSets) for (let attempt = 1; attempt <= 3; attempt++) {
     const body = { contents: [{ role: "user", parts }], generationConfig: { temperature: 0.2 } };
     if (tools.length) body.tools = tools;
     if (it.video) body.generationConfig.mediaResolution = "MEDIA_RESOLUTION_LOW";
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body) });
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body), signal: AbortSignal.timeout(120000) }).catch(e => ({ ok: false, status: 504, json: async () => ({ error: { message: "timeout: " + e.message } }) }));
     const j = await r.json().catch(() => ({}));
     if (!r.ok) {
       lastErr = `${model} [${tools.map(t => Object.keys(t)[0]).join("+") || "no tools"}] HTTP ${r.status}: ${(j.error?.message || "").slice(0, 220)}`;
       log("  ", lastErr);
-      if (r.status === 429 && /retry|second/i.test(j.error?.message || "") && !/quota.*0|limit: 0/i.test(j.error?.message || "")) await new Promise(s => setTimeout(s, 20000));
-      continue;
+      if (r.status === 503 || r.status === 500 || r.status === 504) { await new Promise(s => setTimeout(s, 12000 * attempt)); continue; }   // overloaded → wait and retry same model
+      break;   // 429 / 4xx → try next tool set / model
     }
     const raw = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
-    const m = raw.match(/\{[\s\S]*\}/); if (!m) { lastErr = model + ": no JSON in reply"; continue; }
-    if (model !== MODEL || tools.length < toolSets[0].length) log("   (used " + model + ")");
+    const m = raw.match(/\{[\s\S]*\}/); if (!m) { lastErr = model + ": no JSON in reply"; break; }
+    if (model !== MODEL || tools.length < toolSets[0].length) log("   (used " + model + " " + (tools.map(t => Object.keys(t)[0]).join("+") || "no tools") + ")");
     return JSON.parse(m[0]);
   }
   const e = new Error(lastErr || "Gemini failed"); e.quota = /HTTP 429/.test(lastErr); throw e;
