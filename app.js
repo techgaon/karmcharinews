@@ -170,14 +170,13 @@ function cardHTML(n){
         <button class="ab ${bm?"on":""}" data-act="bm" aria-label="Bookmark">${bm?ICON.bmOn:ICON.bm}</button>
         <button class="ab wa" data-act="wa" aria-label="WhatsApp">${ICON.wa}</button>
         <button class="ab" data-act="share" aria-label="Share">${ICON.share}</button>
-        ${likeBtn(n)}
       </div>
     </div>
     <div class="body">
       <h2>${esc(tx.h)}</h2>
       <p class="sum">${esc(tx.s)}</p>
       ${tx.missing?`<p class="miss">${t("lang_missing")}</p>`:""}
-      <div class="meta"><span class="time">🕒 ${ago(KN_time(n))}</span>${(pl => pl ? `<span class="place">📍 ${esc(pl)}</span>` : "")(placeLine(n, tx.l))}</div>
+      <div class="meta"><span class="time">🕒 ${ago(KN_time(n))}</span>${(pl => pl ? `<span class="place">📍 ${esc(pl)}</span>` : "")(placeLine(n, tx.l))}${likeBtn(n)}</div>
     </div>
     <footer class="src" data-act="${isVid?"video":"open"}">
       <span>${t("published_on")} <b>${src}</b></span><span class="go">${isVid?t("watch_full"):t("read_full")}</span>
