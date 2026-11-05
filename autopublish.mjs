@@ -327,7 +327,18 @@ async function main() {
     picked.push(it);
     if (picked.length >= MAX * 3) break;
   }
-  log(`candidates: ${picked.length} (from ${items.length} items)`);
+  // reserve seats for YouTube: newest relevant videos go first so they are not crowded out by newspaper items
+  const VSEATS = CFG.videoSeats ?? 2;
+  for (const it of items) {
+    if (picked.filter(p => p.video).length >= VSEATS) break;
+    if (!it.video || picked.includes(it) || !relevantByWords(it.title)) continue;
+    it.id = it.id || idOf(it.title);
+    if (picked.some(p => p.id === it.id) || recentTitles.some(t => similar(t, it.title) > 0.6)) continue;
+    if (await db.get("knSeen", it.id) || await db.get("knNews", it.id)) continue;
+    picked.push(it);
+  }
+  picked.sort((a, b) => (b.video ? 1 : 0) - (a.video ? 1 : 0));
+  log(`candidates: ${picked.length} (from ${items.length} items, ${picked.filter(p => p.video).length} videos, ${items.filter(i => i.video).length} videos read)`);
 
   // 3. AI → publish
   let published = 0, skipped = 0, videos = 0, quotaFails = 0;
