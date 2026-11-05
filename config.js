@@ -29,3 +29,8 @@ window.KN_CONFIG = {
   geminiModel: "gemini-3.8-flash",
   summaryWords: 100
 };
+
+/* news time = when the source published it (pubDate), else when we published it */
+window.KN_time = n => { const p = Date.parse(n && n.pubDate); const t = Date.parse(n && n.ts) || Date.now(); return p && p <= Date.now() + 6e5 ? p : t; };
+/* India date YYYY-MM-DD, offset in days */
+window.KN_istDay = (off = 0) => new Date(Date.now() + 5.5 * 3600e3 + off * 864e5).toISOString().slice(0, 10);
