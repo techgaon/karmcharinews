@@ -8,6 +8,11 @@ import fs from "node:fs";
 
 const CFG = JSON.parse(fs.readFileSync(new URL("./feeds.json", import.meta.url)));
 const MAX = +(process.env.MAX_PER_RUN || CFG.maxPerRun || 6);
+/* backfill: BACKFILL_FROM=2026-11-01 → read Google News from that date and publish older stories with their real date */
+const BACKFILL = /^\d{4}-\d\d-\d\d$/.test(process.env.BACKFILL_FROM || "") ? process.env.BACKFILL_FROM : "";
+const BACKFILL_AFTER = BACKFILL ? new Date(Date.parse(BACKFILL) - 864e5).toISOString().slice(0, 10) : "";
+const DEAD = new Set();   // models that hit their daily quota in this run — not retried
+const parseJSON = raw => { const a = raw.indexOf("{"); if (a < 0) return null; for (let b = raw.lastIndexOf("}"); b > a; b = raw.lastIndexOf("}", b - 1)) { try { return JSON.parse(raw.slice(a, b + 1)); } catch (e) {} } return null; };
 const DRY = process.env.DRY_RUN === "1";
 const MOCK = process.env.MOCK === "1";
 const MODEL = process.env.GEMINI_MODEL || CFG.model || "gemini-3.8-flash";
@@ -46,7 +51,7 @@ const unxml = s => String(s || "").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").
 const tag = (x, t) => { const m = x.match(new RegExp(`<${t}[^>]*>([\\s\\S]*?)</${t}>`)); return m ? unxml(m[1]) : ""; };
 async function readFeed(f) {
   const xml = MOCK ? fs.readFileSync(new URL("./mock/rss.xml", import.meta.url), "utf8")
-    : await fetch(f.url, { headers: { "User-Agent": "Mozilla/5.0 KarmchariNewsBot" } }).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); });
+    : await fetch(BACKFILL ? f.url.replace(/when%3A\d+[dh]/i, "after%3A" + BACKFILL_AFTER).replace(/when:\d+[dh]/i, "after:" + BACKFILL_AFTER) : f.url, { headers: { "User-Agent": "Mozilla/5.0 KarmchariNewsBot" } }).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); });
   return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(m => {
     const x = m[1]; let title = tag(x, "title"); const source = tag(x, "source");
     if (source && title.endsWith(" - " + source)) title = title.slice(0, -(source.length + 3));
@@ -229,6 +234,9 @@ Reply with ONLY this JSON (no markdown):
 {"relevant":true,"verified":true,"reason":"","hi":{"h":"","s":""},"en":{"h":"","s":""},"aw":{"h":"","s":""},"bh":{"h":"","s":""},"vibhag":"","state":"","district":"","isGO":false,"sourceName":"","articleUrl":"","place":{"state_hi":"","state_en":"","district_hi":"","district_en":"","block_hi":"","block_en":"","gp_hi":"","gp_en":""}}`;
 }
 function promptVideo(it) {
+  if (it.trusted) return prompt(it).replace(/Steps:\n1\.[^\n]*\n/, `Steps:
+1. WATCH the attached YouTube video "${it.title}" from "${it.channel}", an established news outlet. Write the story only from what the video reports as having happened (an order, decision, protest, court ruling, announcement). Set "verified": true if the video clearly reports such a concrete event with names/places/dates; predictions, opinions, debates, rumours or "may/might/expected" stories → verified=false.
+`).replace("Article:", "Video:");
   return prompt(it).replace(/Steps:\n1\.[^\n]*\n/, `Steps:
 1. WATCH the attached YouTube video "${it.title}" from the channel "${it.channel}". Many such channels post rumours or clickbait ("DA बढ़ेगा?", "बड़ी खुशखबरी"). Set "verified": true ONLY if the video reports a concrete, confirmed fact (an issued order, an official announcement, a published notification) AND the video shows or clearly quotes the official document (order/notification number, date and issuing office) or you can confirm it from reliable sources. Predictions, rumours, "may/might/expected" stories → verified=false.
 `).replace("Article:", "Video:");
@@ -243,6 +251,7 @@ async function gemini(it) {
   const toolSets = it.video ? (CFG.useSearch ? [[{ google_search: {} }], []] : [[]]) : it.text ? [[]] : (CFG.useSearch ? [[{ url_context: {} }, { google_search: {} }], [{ url_context: {} }]] : [[{ url_context: {} }]]);
   let lastErr = "";
   for (const model of models) for (const tools of toolSets) for (let attempt = 1; attempt <= 3; attempt++) {
+    if (DEAD.has(model)) break;
     const body = { contents: [{ role: "user", parts }], generationConfig: { temperature: 0.2 } };
     if (tools.length) body.tools = tools;
     if (it.video) body.generationConfig.mediaResolution = "MEDIA_RESOLUTION_LOW";
@@ -252,12 +261,13 @@ async function gemini(it) {
       lastErr = `${model} [${tools.map(t => Object.keys(t)[0]).join("+") || "no tools"}] HTTP ${r.status}: ${(j.error?.message || "").slice(0, 220)}`;
       log("  ", lastErr);
       if (r.status === 503 || r.status === 500 || r.status === 504) { await new Promise(s => setTimeout(s, 12000 * attempt)); continue; }   // overloaded → wait and retry same model
+      if (r.status === 429 && /quota/i.test(j.error?.message || "")) DEAD.add(model);
       break;   // 429 / 4xx → try next tool set / model
     }
     const raw = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
-    const m = raw.match(/\{[\s\S]*\}/); if (!m) { lastErr = model + ": no JSON in reply"; break; }
+    const obj = parseJSON(raw); if (!obj) { lastErr = model + ": no JSON in reply"; break; }
     if (model !== MODEL || tools.length < toolSets[0].length) log("   (used " + model + " " + (tools.map(t => Object.keys(t)[0]).join("+") || "no tools") + ")");
-    return JSON.parse(m[0]);
+    return obj;
   }
   const e = new Error(lastErr || "Gemini failed"); e.quota = /HTTP 429/.test(lastErr); throw e;
 }
@@ -309,8 +319,9 @@ async function main() {
   for (const f of CFG.feeds) { try { const l = await readFeed(f); items.push(...l); log("feed", f.name, l.length); } catch (e) { log("feed FAIL", f.name, e.message); } }
   const ytList = CFG.youtube.concat((app.youtubeChannels || []).filter(Boolean).map(id => ({ id: id.trim(), name: "" })));
   const seenCh = new Set();
-  for (const ch of ytList) { if (seenCh.has(ch.id)) continue; seenCh.add(ch.id); try { const l = await readYouTube(ch); items.push(...l); log("youtube", ch.name || ch.id, l.length); } catch (e) { log("youtube FAIL", ch.id, e.message); } }
-  const maxAge = Date.now() - CFG.maxAgeHours * 3600e3;
+  for (const ch of ytList) { if (seenCh.has(ch.id)) continue; seenCh.add(ch.id); try { const l = await readYouTube(ch); l.forEach(x => { x.trusted = !!ch.trusted; }); items.push(...l); log("youtube", ch.name || ch.id, l.length); } catch (e) { log("youtube FAIL", ch.id, e.message); } }
+  const maxAge = BACKFILL ? Date.parse(BACKFILL) - 6 * 3600e3 : Date.now() - CFG.maxAgeHours * 3600e3;
+  if (BACKFILL) log("BACKFILL from", BACKFILL, "max", MAX, "stories");
   items = items.filter(i => !i.date || isNaN(Date.parse(i.date)) || Date.parse(i.date) > maxAge);
   items.sort((a, b) => (Date.parse(b.date) || 0) - (Date.parse(a.date) || 0));
 
@@ -347,7 +358,7 @@ async function main() {
     if (published >= MAX) break;
     if (it.video && videos >= MAXV) continue;
     if (it.video) videos++;
-    if (Date.now() - T0 > (CFG.runBudgetMin || 15) * 60000) { log("time budget used — stopping, next run continues"); break; }
+    if (Date.now() - T0 > (+process.env.RUN_BUDGET_MIN || CFG.runBudgetMin || 15) * 60000) { log("time budget used — stopping, next run continues"); break; }
     log("→", it.title.slice(0, 90));
     await prefetch(it);
     if (!it.video && !it.text && !CFG.allowUrlContext) { log("  skip for now: article text not readable (saves Gemini quota)"); continue; }
@@ -362,7 +373,7 @@ async function main() {
       id: it.id, vibhag: o.vibhag, state: o.state, district: o.district, type: it.video ? "video" : "image", image: await findImage(it, o), youtube: it.video ? it.link : "",
       icon: it.video ? "🎬" : o.isGO ? "📄" : ICON[o.vibhag], source: it.video ? it.source : (o.sourceName || it.source || "News"), sourceUrl: it.realUrl || it.link,
       isGO: !!o.isGO, pinned: false, isDemo: false, ai: true, auto: true, origTitle: it.title,
-      ts: new Date().toISOString(), pubDate: it.date || "",
+      ts: (d => d && d < Date.now() ? new Date(d) : new Date())(Date.parse(it.date)).toISOString(), pubDate: it.date || "",
       place: o.place || {},
       lang: { hi: o.hi, en: o.en, aw: o.aw, bh: o.bh }
     };
