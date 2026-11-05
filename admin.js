@@ -65,14 +65,14 @@ function openPanel(){
     <div class="adm-top"><span style="font-size:20px">🛡️</span><b>Karmchari News — Admin</b>
       <button class="btn sm ghost" id="admLogout">Lock</button><button class="ic" data-close style="color:#fff">✕</button></div>
     <div class="adm-tabs" id="admTabs">
-      ${[["rss","🤖 AI Auto"],["manage","🗂️ Manage"],["publish","✨ Manual"],["settings","⚙️ Settings"]].map(([k,l])=>`<button data-at="${k}" class="${tab===k?"on":""}">${l}</button>`).join("")}
+      ${[["rss","🤖 AI Auto"],["stats","📊 Visitors"],["manage","🗂️ Manage"],["publish","✨ Manual"],["settings","⚙️ Settings"]].map(([k,l])=>`<button data-at="${k}" class="${tab===k?"on":""}">${l}</button>`).join("")}
     </div>
     <div class="adm-body" id="admBody"></div></div>`, "full");
   $("#admTabs").onclick = e => { const b = e.target.closest("[data-at]"); if(!b) return; tab = b.dataset.at; document.querySelectorAll("#admTabs button").forEach(x=>x.classList.toggle("on", x===b)); renderTab(); };
   $("#admLogout").onclick = () => { sessionStorage.removeItem("kn_admin"); App.closeModal(); App.toast("Admin locked"); };
   renderTab();
 }
-function renderTab(){ ({publish:renderPublish, manage:renderManage, rss:renderRss, settings:renderSettings})[tab](); }
+function renderTab(){ ({publish:renderPublish, manage:renderManage, rss:renderRss, settings:renderSettings, stats:renderStats})[tab](); }
 
 /* ---------- Publish ---------- */
 function opt(list, val){ return list.map(([v,l])=>`<option value="${esc(v)}" ${v===val?"selected":""}>${esc(l)}</option>`).join(""); }
@@ -315,6 +315,31 @@ async function fetchRss(){
 }
 let timer = null;
 function schedule(){ clearInterval(timer); const c = rssCfg(); if(c.on && unlocked()) timer = setInterval(fetchRss, c.every*60000); }
+
+/* ---------- Visitors (only admin can read knStats) ---------- */
+async function renderStats(){
+  const box = $("#admBody");
+  if(!Store.live){ box.innerHTML = `<p class="note">Visitor counter works only in LIVE mode.</p>`; return; }
+  box.innerHTML = `<p class="muted">⏳ Loading visitors…</p>`;
+  let rows;
+  try{ rows = await Store.visitStats(30); }
+  catch(e){ box.innerHTML = `<p class="note">🔒 Visitor numbers are visible only when you are signed in with the admin Google account (${esc(KN_CONFIG.adminEmails[0])}).<br><small>${esc(e.message||"")}</small></p>`; return; }
+  const tot = rows[0], days = rows.slice(1), today = days[0], yest = days[1];
+  const sum = (a, k) => a.reduce((x, r) => x + r[k], 0), w7 = days.slice(0, 7), max = Math.max(1, ...days.slice(0, 14).map(r => r.v));
+  const fmt = n => n.toLocaleString("en-IN"), dl = id => { const d = new Date(id.slice(1) + "T00:00:00"); return d.toLocaleDateString("hi-IN", {day:"numeric", month:"short"}); };
+  box.innerHTML = `<div class="vstat">
+    <div class="vs big"><small>आज (Today)</small><b>${fmt(today.u)}</b><span>visitors · ${fmt(today.v)} visits</span></div>
+    <div class="vs"><small>कल</small><b>${fmt(yest.u)}</b><span>${fmt(yest.v)} visits</span></div>
+    <div class="vs"><small>पिछले 7 दिन</small><b>${fmt(sum(w7, "u"))}</b><span>${fmt(sum(w7, "v"))} visits</span></div>
+    <div class="vs"><small>पिछले 30 दिन</small><b>${fmt(sum(days, "u"))}</b><span>${fmt(sum(days, "v"))} visits</span></div>
+    <div class="vs"><small>कुल (All time)</small><b>${fmt(tot.u)}</b><span>${fmt(tot.v)} visits</span></div>
+  </div>
+  <h3 style="margin-top:16px">पिछले 14 दिन</h3>
+  <div class="vbars">${days.slice(0, 14).reverse().map(r => `<div class="vb"><i style="height:${Math.round(r.v / max * 100)}%"><em>${r.v || ""}</em></i><small>${dl(r.id)}</small></div>`).join("")}</div>
+  <p class="muted sm">Visitor = एक मोबाइल/ब्राउज़र दिन में एक बार गिना जाता है। Visits = ऐप कितनी बार खोला गया। आपकी अपनी admin visits नहीं गिनी जातीं (admin लॉगिन के बाद)। यह गिनती सिर्फ़ इस admin पैनल में दिखती है।</p>
+  <button class="btn ghost wide" id="vsR">🔄 Refresh</button>`;
+  $("#vsR").onclick = renderStats;
+}
 
 /* ---------- Settings ---------- */
 function renderSettings(){
