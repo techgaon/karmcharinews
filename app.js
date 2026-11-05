@@ -155,7 +155,7 @@ function cardHTML(n){
       <h2>${esc(tx.h)}</h2>
       <p class="sum">${esc(tx.s)}</p>
       ${tx.missing?`<p class="miss">${t("lang_missing")}</p>`:""}
-      <div class="meta"><span class="time">🕒 ${ago(n.ts)}</span>${(pl => pl ? `<span class="place">📍 ${esc(pl)}</span>` : "")(placeLine(n, tx.l))}</div>
+      <div class="meta"><span class="time">🕒 ${ago(KN_time(n))}</span>${(pl => pl ? `<span class="place">📍 ${esc(pl)}</span>` : "")(placeLine(n, tx.l))}</div>
     </div>
     <footer class="src" data-act="${isVid?"video":"open"}">
       <span>${t("published_on")} <b>${src}</b></span><span class="go">${isVid?t("watch_full"):t("read_full")}</span>
