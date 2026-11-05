@@ -96,17 +96,29 @@ async function ogImage(url) {   // og:image / twitter:image of the article page
     if (!m) return "";
     let img = m[1].replace(/&amp;/g, "&");
     if (img.startsWith("//")) img = "https:" + img; else if (img.startsWith("/")) img = new URL(img, url).href;
-    if (!/^https:\/\//.test(img) || /logo|default|placeholder|favicon/i.test(img)) return "";
+    if (!/^https:\/\//.test(img) || /logo|default|placeholder|favicon|icon[-_.]|\/icons?\/|sprite|\.svg(\?|$)/i.test(img)) return "";
     return img;
   } catch (e) { return ""; }
 }
+async function bingImage(title) {   // Bing News thumbnail for the same headline (served by Bing)
+  try {
+    const xml = await fetch("https://www.bing.com/news/search?format=rss&setlang=hi&q=" + encodeURIComponent(title.slice(0, 120)), { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(12000) }).then(r => r.ok ? r.text() : "");
+    for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
+      const x = m[1], t = tag(x, "title"), im = (x.match(/<News:Image>([^<]+)<\/News:Image>/i) || [])[1];
+      if (im && similar(t, title) > 0.5) return unxml(im).replace(/^http:/, "https:");
+    }
+  } catch (e) {}
+  return "";
+}
 async function findImage(it, o) {
   if (it.video) { const v = (it.link.split("v=")[1] || "").slice(0, 11); return v ? `https://i.ytimg.com/vi/${v}/hqdefault.jpg` : ""; }
-  const url = o.articleUrl && /^https?:\/\//.test(o.articleUrl) && !/google\.|vertexaisearch/.test(o.articleUrl) ? o.articleUrl : await realUrl(it.link);
-  if (!url) return "";
-  it.realUrl = url;
-  const img = await ogImage(url);
-  log("  image:", img ? "found" : "none");
+  const isArticle = u => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) && !/google\.|vertexaisearch/.test(x.hostname) && x.pathname.replace(/\/+$/, "").length > 12; } catch (e) { return false; } };
+  let url = isArticle(o.articleUrl) ? o.articleUrl : "";
+  if (!url) { const r = await realUrl(it.link); if (isArticle(r)) url = r; }
+  if (url) it.realUrl = url;
+  let img = url ? await ogImage(url) : "", from = "article";
+  if (!img) { img = await bingImage(it.title); from = "bing"; }
+  log("  image:", img ? "found (" + from + ")" : "none");
   return img;
 }
 
@@ -128,7 +140,7 @@ Steps:
 1. Open the link (or search the web for this exact headline from this publisher) and READ the actual article.
 2. Decide "relevant": true ONLY if the story directly matters to government employees/pensioners/workers in India (pay, DA, pension, transfers, recruitment of govt staff, service rules, GOs, departmental orders, strikes/demands, training, duties). Crime, politics, sports, celebrity, generic schemes for public = false.
 3. "verified": true ONLY if you could read the article or confirm its facts from reliable sources. Never guess.
-4. If relevant and verified, write ONE card in FOUR languages. Each summary EXACTLY ${WORDS} words, neutral, factual, your own words (do not copy sentences), no invented numbers, dates or names. Headline max 14 words.
+4. If relevant and verified, write ONE card in FOUR languages. Each summary EXACTLY ${WORDS} words, neutral, factual, your own words (do not copy sentences), no invented numbers, dates or names. Write every number in Western digits (0-9) and use EXACTLY the same numbers in all four languages; a number in a headline must also appear in that language's summary. Headline max 14 words.
    "hi" standard Hindi (Devanagari). "en" simple English. "aw" Awadhi in Devanagari (अहै, अउर, मा, खातिर, कहिन). "bh" Bhojpuri in Devanagari (बा, आ, में, खातिर, कहलें).
 5. Tags: vibhag one of panchayat|shiksha|revenue|police|health|finance|all ; state one of UP|Bihar|MP|Rajasthan|Uttarakhand|National ; district = English name of a UP district if the story is about one district, else "All" ; isGO true if it is about a Government Order/Shasanadesh ; sourceName = publisher ; articleUrl = the exact publisher web address of the article you read (not a Google link).
 Reply with ONLY this JSON (no markdown):
@@ -166,6 +178,17 @@ async function gemini(it) {
   }
   const e = new Error(lastErr || "Gemini failed"); e.quota = /HTTP 429/.test(lastErr); throw e;
 }
+/* ---------------- fact check: numbers must match in every language ---------------- */
+const DEV = "०१२३४५६७८९";
+const nums = t => (String(t || "").replace(/[०-९]/g, d => DEV.indexOf(d)).match(/\d+(?:\.\d+)?/g) || []).filter(n => !/^(19|20)\d\d$/.test(n));
+function numbersProblem(o) {
+  const hiS = new Set(nums(o.hi.s)), hiAll = new Set(nums(o.hi.h + " " + o.hi.s)), enAll = new Set(nums(o.en.h + " " + o.en.s));
+  for (const l of ["hi", "en", "aw", "bh"]) { const body = new Set(nums(o[l].s)); for (const n of nums(o[l].h)) if (!body.has(n)) return `${l} headline number ${n} not in its summary`; }
+  for (const n of enAll) if (!hiAll.has(n)) return `number ${n} in English but not in Hindi`;
+  for (const n of hiAll) if (!enAll.has(n)) return `number ${n} in Hindi but not in English`;
+  for (const l of ["aw", "bh"]) for (const n of nums(o[l].h + " " + o[l].s)) if (!hiAll.has(n)) return `number ${n} in ${l} but not in Hindi`;
+  return "";
+}
 function validate(o) {
   const V = ["panchayat", "shiksha", "revenue", "police", "health", "finance", "all"], S = ["UP", "Bihar", "MP", "Rajasthan", "Uttarakhand", "National"];
   if (!o.relevant) return "not employee news: " + (o.reason || "");
@@ -176,6 +199,7 @@ function validate(o) {
     const n = wc(o[l].s); if (n < 80) return `${l} too short (${n} words)`;
     if (l !== "en" && !/[ऀ-ॿ]/.test(o[l].s)) return l + " not in Devanagari";
   }
+  const np = numbersProblem(o); if (np) return "numbers do not match across languages: " + np;
   if (!V.includes(o.vibhag)) o.vibhag = "all";
   if (!S.includes(o.state)) o.state = "UP";
   if (!o.district || !CFG.upDistricts.includes(o.district)) o.district = "All";
@@ -239,7 +263,14 @@ async function main() {
     await new Promise(s => setTimeout(s, MOCK ? 0 : 4000));
   }
 
-  // 4. housekeeping: remove auto stories older than N days
+  // 4a. re-check recent AI stories already in the feed
+  if (!MOCK) for (const n of await db.recent("knNews", 60)) {
+    if (!n.auto || !n.lang?.hi || !n.lang?.en) continue;
+    const np = numbersProblem({ hi: n.lang.hi, en: n.lang.en, aw: n.lang.aw || { h: "", s: "" }, bh: n.lang.bh || { h: "", s: "" } });
+    if (np) { await db.del("knNews", n.id); log("  removed old story (numbers mismatch):", n.lang.hi.h, "—", np); continue; }
+    if (n.image && /logo|favicon|icon[-_.]|\/icons?\//i.test(n.image)) { const c = { ...n }; delete c.id; c.image = ""; await db.set("knNews", n.id, c); log("  cleared logo image:", n.lang.hi.h); }
+  }
+  // 4b. housekeeping: remove auto stories older than N days
   const old = await db.autoOlderThan(new Date(Date.now() - CFG.keepDays * 864e5).toISOString());
   for (const id of old) await db.del("knNews", id);
   log(`done: published ${published}, skipped ${skipped}, cleaned ${old.length}`);
