@@ -77,7 +77,20 @@ async function ytFromPage(ch) {   // fallback when YouTube's RSS feed is blocked
   if (!out.length) throw new Error("no videos found on page");
   return out;
 }
+async function ytFromApi(ch) {   // YouTube Data API v3 (secret YOUTUBE_API_KEY) — ~2 quota units per channel
+  const key = process.env.YOUTUBE_API_KEY, api = "https://www.googleapis.com/youtube/v3/";
+  let id = ch.id;
+  if (!/^UC[\w-]{22}$/.test(id)) {
+    const j = await fetch(`${api}channels?part=id&forHandle=${encodeURIComponent(id.startsWith("@") ? id : "@" + id)}&key=${key}`).then(r => r.json());
+    id = j.items?.[0]?.id; if (!id) throw new Error("api: channel not found " + ch.id);
+  }
+  const j = await fetch(`${api}playlistItems?part=snippet&maxResults=15&playlistId=UU${id.slice(2)}&key=${key}`).then(r => r.json());
+  if (j.error) throw new Error("api: " + j.error.message);
+  return (j.items || []).map(x => ({ title: x.snippet.title, link: "https://www.youtube.com/watch?v=" + x.snippet.resourceId.videoId, date: x.snippet.publishedAt,
+    source: "YouTube — " + (ch.name || x.snippet.channelTitle), video: true, channel: ch.name || x.snippet.channelTitle }));
+}
 async function readYouTube(ch) {
+  if (!MOCK && process.env.YOUTUBE_API_KEY) return await ytFromApi(ch);
   let xml;
   try {
     xml = MOCK ? fs.readFileSync(new URL("./mock/yt.xml", import.meta.url), "utf8")
@@ -171,7 +184,7 @@ Reply with ONLY this JSON (no markdown):
 }
 function promptVideo(it) {
   return prompt(it).replace(/Steps:\n1\.[^\n]*\n/, `Steps:
-1. WATCH the attached YouTube video "${it.title}" from the channel "${it.channel}". Many such channels post rumours or clickbait ("DA बढ़ेगा?", "बड़ी खुशखबरी"). Set "verified": true ONLY if the video reports a concrete, confirmed fact (an issued order, an official announcement, a published notification) AND you can confirm it with a web search of reliable news or official sources. Predictions, rumours, "may/might/expected" stories → verified=false.
+1. WATCH the attached YouTube video "${it.title}" from the channel "${it.channel}". Many such channels post rumours or clickbait ("DA बढ़ेगा?", "बड़ी खुशखबरी"). Set "verified": true ONLY if the video reports a concrete, confirmed fact (an issued order, an official announcement, a published notification) AND the video shows or clearly quotes the official document (order/notification number, date and issuing office) or you can confirm it from reliable sources. Predictions, rumours, "may/might/expected" stories → verified=false.
 `).replace("Article:", "Video:");
 }
 async function gemini(it) {
