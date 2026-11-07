@@ -16,19 +16,40 @@ const Store = {
   async init(){
     this.cfg = Object.assign(this.cfg, LS.get("kn_cfg", {}));
     if(LIVE){
+      // 1) show last-seen stories instantly, 2) fetch fresh list over REST while the Firebase SDK loads
+      const cache = LS.get("kn_cache", []);
+      if(cache.length){ this._liveList = cache; this._emitNews(cache); }
+      this._restFirst();
       try { await this._initFirebase(); this.countVisit(); return; }
       catch(e){ console.error("Firebase failed, falling back to preview", e); this.live = false; }
     }
     this.user = LS.get("kn_user", null);
     this._emitUser();
-    this._emitNews();
+    this._emitNews(); this._markLoaded();
+  },
+
+  loaded: false,
+  _saveCache(list){ try{ LS.set("kn_cache", list.slice(0, 60)); }catch(e){} },
+  _markLoaded(){ if(!this.loaded){ this.loaded = true; document.dispatchEvent(new Event("kn-loaded")); } },
+  async _restFirst(){
+    try{
+      const P = C.firebase.projectId, url = `https://firestore.googleapis.com/v1/projects/${P}/databases/(default)/documents/knNews?pageSize=60&orderBy=ts%20desc&key=${C.firebase.apiKey}`;
+      const j = await fetch(url).then(r => r.ok ? r.json() : null); if(!j || this._snapDone) return;
+      const val = x => x == null ? null : "stringValue" in x ? x.stringValue : "integerValue" in x ? +x.integerValue : "doubleValue" in x ? x.doubleValue
+        : "booleanValue" in x ? x.booleanValue : "timestampValue" in x ? x.timestampValue : "nullValue" in x ? null
+        : "mapValue" in x ? Object.fromEntries(Object.entries(x.mapValue.fields || {}).map(([k, v]) => [k, val(v)]))
+        : "arrayValue" in x ? (x.arrayValue.values || []).map(val) : null;
+      const list = (j.documents || []).map(d => Object.assign({id: d.name.split("/").pop()}, val({mapValue: d})));
+      if(this._snapDone) return;
+      this._liveList = list; this._saveCache(list); this._emitNews(list); this._markLoaded();
+    }catch(e){}
   },
 
   /* ---------- news ---------- */
   _localNews(){ return LS.get("kn_news", []); },
   _merge(list){
     // demo cards: hidden by admin switch, or automatically once the live feed has real stories
-    const seed = (this.cfg.hideDemo || (this.live && list.length >= 3)) ? [] : (window.KN_SEED||[]);
+    const seed = (this.cfg.hideDemo || (this.live && (list.length >= 3 || !this.loaded))) ? [] : (window.KN_SEED||[]);
     const over = LS.get("kn_seed_over", {});          // admin edits/deletes of demo cards (preview)
     const seeds = seed.filter(s=>!(over[s.id]&&over[s.id].deleted)).map(s=> over[s.id]? Object.assign({}, s, over[s.id]) : s);
     const all = list.concat(seeds.filter(s=>!list.find(n=>n.id===s.id)));
@@ -126,7 +147,8 @@ const Store = {
       document.querySelectorAll(".card[data-id] .like .lc").forEach(el => { const id = el.closest(".card").dataset.id; const c = this.likes(id); el.textContent = c ? (c >= 1000 ? (c/1000).toFixed(1) + "K" : c) : ""; });
     }, ()=>{});
     this._db.collection("knNews").orderBy("ts","desc").limit(300).onSnapshot(s=>{
-      this._liveList = s.docs.map(d=>Object.assign({id:d.id}, d.data())); this._emitNews(this._liveList);
+      this._snapDone = true;
+      this._liveList = s.docs.map(d=>Object.assign({id:d.id}, d.data())); this._saveCache(this._liveList); this._emitNews(this._liveList); this._markLoaded();
     }, e=>console.warn("news read", e));
     await new Promise(res=>{
       this._auth.onAuthStateChanged(async u=>{
