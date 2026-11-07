@@ -316,7 +316,12 @@ async function main() {
 
   // 1. collect
   let items = [];
-  for (const f of CFG.feeds) { try { const l = await readFeed(f); items.push(...l); log("feed", f.name, l.length); } catch (e) { log("feed FAIL", f.name, e.message); } }
+  // district sweep: every run scans a rotating slice of UP's 75 districts (all 75 covered every ~2.5 hours; all of them in a backfill)
+  const DH = CFG.districtsHi || [], per = BACKFILL ? DH.length : (CFG.districtScan?.perRun || 15);
+  const slot = Math.floor(Date.now() / 1800e3) % Math.max(1, Math.ceil(DH.length / per));
+  const distFeeds = DH.slice(slot * per, slot * per + per).map(d => ({ name: "District: " + d,
+    url: "https://news.google.com/rss/search?q=" + encodeURIComponent(`"${d}" (कर्मचारी OR कर्मचारियों OR शिक्षक OR सचिव OR लेखपाल OR पंचायत OR सफाईकर्मी OR वेतन OR निलंबित OR तबादला OR संविदा) when:2d`) + "&hl=hi&gl=IN&ceid=IN:hi" }));
+  for (const f of [...CFG.feeds, ...distFeeds]) { try { const l = await readFeed(f); items.push(...l); log("feed", f.name, l.length); } catch (e) { log("feed FAIL", f.name, e.message); } }
   const ytList = CFG.youtube.concat((app.youtubeChannels || []).filter(Boolean).map(id => ({ id: id.trim(), name: "" })));
   const seenCh = new Set();
   for (const ch of ytList) { if (seenCh.has(ch.id)) continue; seenCh.add(ch.id); try { const l = await readYouTube(ch); l.forEach(x => { x.trusted = !!ch.trusted; }); items.push(...l); log("youtube", ch.name || ch.id, l.length); } catch (e) { log("youtube FAIL", ch.id, e.message); } }
