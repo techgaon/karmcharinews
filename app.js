@@ -14,7 +14,7 @@ window.KN_UILANG = "en";
 
 /* ---------------- boot ---------------- */
 async function boot(){
-  const deep = (location.hash.match(/n=([\w-]+)/)||[])[1];
+  let deep = (location.hash.match(/n=([\w-]+)/)||[])[1];
   const g = KN_LS.get("kn_guest", {});
   S.uiLang = g.uiLang || "en"; S.newsLang = g.newsLang || "hi"; window.KN_UILANG = S.uiLang;
   bindStatic();
@@ -24,7 +24,9 @@ async function boot(){
     if(p.newsLang) S.newsLang = p.newsLang;
     renderChrome(); refresh(true);
   });
-  Store.onNews(() => refresh(false));
+  Store.onNews(() => { refresh(false); if(deep){ const i = S.list.findIndex(n=>n.id===deep); if(i>=0){ S.idx = i; renderFeed(); deep = null; } } });
+  document.addEventListener("kn-loaded", () => { loaderDone(); renderFeed(); });
+  loaderStart();
   await Store.init();
   if(deep){ const i = S.list.findIndex(n=>n.id===deep); if(i>=0){ S.idx = i; renderFeed(); } }
   setTimeout(()=>$("#hint").classList.add("gone"), 4500);
@@ -183,8 +185,21 @@ function cardHTML(n){
     </footer>
   </article>`;
 }
+/* loading screen: % counter → green tick (only while nothing is on screen yet) */
+let LOAD = {p:0, t:null};
+function loaderStart(){
+  if(LOAD.t) return;
+  LOAD.t = setInterval(() => { if(Store.loaded) return; LOAD.p = Math.min(95, LOAD.p + Math.max(1, (95 - LOAD.p) * 0.12)); const el = $("#knLp"); if(el) el.textContent = Math.round(LOAD.p) + "%"; const b = $("#knLb"); if(b) b.style.width = LOAD.p + "%"; }, 120);
+}
+function loaderDone(){ clearInterval(LOAD.t); LOAD.p = 100; const c = $("#knLoad"); if(c){ c.classList.add("ok"); $("#knLp").textContent = "100%"; $("#knLb").style.width = "100%"; } }
+function loaderHTML(){
+  const hi = S.uiLang !== "en";
+  return `<article class="card endcard"><div class="endin" id="knLoad"><div class="ldr"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="23"/><path d="M15 27l7 7 15-16"/></svg></div>
+    <h2>${hi ? "ख़बरें लोड हो रही हैं…" : "Loading news…"}</h2><div class="lbar"><i id="knLb" style="width:${LOAD.p}%"></i></div><p class="lp" id="knLp">${Math.round(LOAD.p)}%</p></div></article>`;
+}
 function endHTML(){
   const empty = !S.list.length;
+  if(empty && !Store.loaded) return loaderHTML();
   return `<article class="card endcard"><div class="endin">
     <div class="big">${empty?"🗞️":"✅"}</div><h2>${empty?t("empty"):t("end_feed")}</h2>
     <p>${empty?t("empty_hint"):t("stories", S.list.length)}</p>
@@ -212,6 +227,7 @@ function renderFeed(){
   f.innerHTML = html.join("");
   f.querySelectorAll(".card").forEach(fitCard);
   const cur = S.list[S.idx];
+  warmShare();
   const cc = f.querySelector(".card.cur");
   if(cc && S.lastShown !== (cur ? cur.id : "end")){ cc.classList.add("enter"); S.lastShown = cur ? cur.id : "end"; }
   if(cur) history.replaceState(null, "", "#n="+cur.id); else history.replaceState(null, "", location.pathname);
@@ -314,7 +330,18 @@ function shareCaption(n){
 }
 function shareText(n){ const tx = textOf(n, cardLangOf(n)); return `*${tx.h}*\n\n${tx.s}\n\n📰 Karmchari News — ${KN_CONFIG.tagline}\n${storyUrl(n)}`; }
 /* ---- Inshorts-style share card (image) ---- */
-const SHARE_CACHE = {};
+const SHARE_CACHE = {}, SHARE_PENDING = {};
+/* prepare the share card of the story on screen in the background, so the share button is instant */
+let warmT = null;
+function warmShare(){
+  clearTimeout(warmT);
+  warmT = setTimeout(() => {
+    const n = S.list[S.idx]; if(!n || !navigator.canShare) return;
+    const key = n.id + "|" + cardLangOf(n); if(SHARE_CACHE[key] || SHARE_PENDING[key]) return;
+    const go = () => { SHARE_PENDING[key] = makeShareImage(n).catch(() => null).finally(() => { delete SHARE_PENDING[key]; }); };
+    (window.requestIdleCallback || (f => setTimeout(f, 50)))(go);
+  }, 900);
+}
 function loadImg(src, cors){ return new Promise(res => { if(!src) return res(null); const im = new Image(); if(cors) im.crossOrigin = "anonymous"; let done = false;
   const fin = v => { if(!done){ done = true; res(v); } }; im.onload = () => fin(im); im.onerror = () => fin(null); setTimeout(()=>fin(null), 3500); im.src = src; }); }
 function proxied(u, w, h){ return "https://images.weserv.nl/?url=" + encodeURIComponent(u.replace(/^https?:\/\//, "")) + `&w=${w}&h=${h}&fit=cover&a=attention&output=jpg&q=82`; }
@@ -377,7 +404,7 @@ async function makeShareImage(n){
 }
 async function shareCard(n, viaWa){
   let file = null;
-  if(navigator.canShare){ toast(cardLangOf(n)==="en" ? "Preparing card…" : "कार्ड तैयार हो रहा है…"); try{ file = await makeShareImage(n); }catch(e){ file = null; } }
+  if(navigator.canShare){ const key = n.id + "|" + cardLangOf(n); if(!SHARE_CACHE[key]) toast(cardLangOf(n)==="en" ? "Preparing card…" : "कार्ड तैयार हो रहा है…"); try{ file = await (SHARE_PENDING[key] || makeShareImage(n)); }catch(e){ file = null; } }
   if(file && navigator.canShare({files:[file]})){
     try{ await navigator.share({files:[file], text: shareCaption(n)}); return; }
     catch(e){
