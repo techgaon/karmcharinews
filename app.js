@@ -11,6 +11,32 @@ const S = {
   list: [], idx: 0, cardLang: {}, anim: false
 };
 window.KN_UILANG = "en";
+const resume = KN_LS.get('kn_reading_position', {});
+let restoreId = resume.id || null, knownIds = new Set(resume.ids || []), pendingIds = new Set(), previewTimer;
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+function updateNewsNotice(){
+  const count = S.list.slice(0, S.idx).filter(n=>pendingIds.has(n.id)).length;
+  const b = $('#newNews'); b.hidden = !count || S.tab === 'bm';
+  b.textContent = S.uiLang === 'en' ? `↑ ${count} new ${count===1?'story':'stories'} · Tap to read` : `↑ ${count} नई ख़बरें · पढ़ने के लिए टैप करें`;
+  $('#headlineBrowse').hidden=S.idx<2;
+  $('#headlineBrowse').textContent=S.uiLang==='en'?'↑ Browse headlines':'↑ ख़बरों के शीर्षक देखें';
+}
+function headlinePreview(latest=false){
+  if(S.anim) return;
+  const stop = Math.min(S.idx, S.list.length), items = S.list.slice(0, stop);
+  if(!items.length) return;
+  const en = S.uiLang === 'en';
+  openModal(`<div class="preview-head"><h3>${en?'Headlines at a glance':'ख़बरें एक नज़र में'}</h3><button class="btn ghost" data-close>${en?'Close':'बंद करें'}</button></div><p class="note">${en?'Tap any headline to open it.':'किसी भी शीर्षक पर टैप करके ख़बर खोलें।'}</p><div class="headline-previews">${items.map((n,i)=>`<button class="headline-preview" data-preview="${i}"><span>${i+1}</span><strong>${esc(textOf(n,cardLangOf(n)).h)}</strong><small>${esc(n.source||'Karmchari News')}</small></button>`).join('')}</div><button class="btn primary wide" id="readLatest">↑ ${en?'Read latest news':'सबसे नई ख़बर पढ़ें'}</button>${latest?`<button class="btn ghost wide" id="pausePreview">${en?'Pause to read headlines':'रुककर शीर्षक पढ़ें'}</button>`:''}`, 'news-preview');
+  const openAt = i => { clearTimeout(previewTimer); closeModal(); S.idx=i; if(i===0){pendingIds.clear();S.list.forEach(n=>knownIds.add(n.id));} renderFeed(); };
+  $('#sheet').querySelectorAll('[data-preview]').forEach(b=>b.onclick=()=>openAt(Number(b.dataset.preview)));
+  $('#readLatest').onclick=()=>openAt(0);
+  if(latest){
+    const box=$('.headline-previews'); box.scrollTop=box.scrollHeight;
+    requestAnimationFrame(()=>box.scrollTo({top:0,behavior:reducedMotion()?'instant':'smooth'}));
+    previewTimer=setTimeout(()=>openAt(0),reducedMotion()?0:2200);
+    $('#pausePreview').onclick=()=>{clearTimeout(previewTimer);$('#pausePreview').hidden=true;};
+  }
+}
 
 /* ---------------- boot ---------------- */
 async function boot(){
@@ -52,6 +78,9 @@ function computeList(){
 function refresh(keepPos){
   const curId = S.list[S.idx] && S.list[S.idx].id;
   S.list = computeList();
+  if(knownIds.size) S.list.forEach(n=>{if(!knownIds.has(n.id))pendingIds.add(n.id)});
+  if(!knownIds.size && S.list.length) knownIds=new Set(S.list.map(n=>n.id));
+  if(restoreId){const restored=S.list.findIndex(n=>n.id===restoreId);if(restored>=0){S.idx=restored;restoreId=null;}}
   const i = keepPos && curId ? S.list.findIndex(n=>n.id===curId) : -1;
   S.idx = i >= 0 ? i : Math.min(S.idx, Math.max(0, S.list.length));
   if(!keepPos && curId){ const j = S.list.findIndex(n=>n.id===curId); if(j>=0) S.idx = j; }
@@ -227,6 +256,9 @@ function renderFeed(){
   f.innerHTML = html.join("");
   f.querySelectorAll(".card").forEach(fitCard);
   const cur = S.list[S.idx];
+  if(cur){knownIds.add(cur.id);pendingIds.delete(cur.id);}
+  updateNewsNotice();
+  if(cur && !restoreId) KN_LS.set('kn_reading_position',{id:cur.id,ids:[...knownIds].slice(-600)});
   warmShare();
   const cc = f.querySelector(".card.cur");
   if(cc && S.lastShown !== (cur ? cur.id : "end")){ cc.classList.add("enter"); S.lastShown = cur ? cur.id : "end"; }
@@ -247,9 +279,9 @@ function go(dir){
   if(!cur || !nb){ S.idx = target; renderFeed(); return; }
   S.anim = true;
   f.classList.add("animating");
-  if(dir > 0){ cur.style.transform = "translateY(-104%) rotateX(8deg) scale(.96)"; nb.style.transform = "none"; nb.style.filter = "none"; }
+  if(dir > 0){ cur.style.transform = "translateY(-100%) rotateX(72deg) scale(.96)"; nb.style.transform = "none"; nb.style.filter = "none"; }
   else { nb.style.transform = "none"; cur.style.transform = "translateY(0) scale(.92)"; cur.style.filter = "brightness(.6)"; }
-  setTimeout(()=>{ f.classList.remove("animating"); S.idx = target; S.anim = false; renderFeed(); }, 330);
+  setTimeout(()=>{ f.classList.remove("animating"); S.idx = target; S.anim = false; renderFeed(); }, reducedMotion()?0:460);
 }
 function bounce(dir){
   const c = feed().querySelector(".cur"); if(!c) return;
@@ -269,7 +301,7 @@ function bindSwipe(){
     const h = f.clientHeight, cur = f.querySelector(".cur");
     if(dy < 0){
       const nx = f.querySelector(".next"); const p = Math.min(1, -dy/h);
-      cur.style.transform = `translateY(${dy}px) rotateX(${p*8}deg) scale(${1-p*.04})`;
+      cur.style.transform = `translateY(${dy}px) rotateX(${p*65}deg) scale(${1-p*.04})`;
       if(nx){ nx.style.transform = `scale(${.92+p*.08})`; nx.style.filter = `brightness(${.6+p*.4})`; }
       else cur.style.transform = `translateY(${dy*.25}px)`;
     } else {
@@ -287,12 +319,13 @@ function bindSwipe(){
       return;
     }
     if(axis !== "y") return;
+    if(dy>100 && v>1 && S.idx>1){ renderFeed(); headlinePreview(); return; }
     const commit = Math.abs(dy) > h*.16 || v > .55;
     if(commit && dy < 0 && S.idx < S.list.length) go(1);
     else if(commit && dy > 0 && S.idx > 0) go(-1);
     else { f.classList.add("animating"); f.querySelectorAll(".card").forEach(c=>{ c.style.transform=""; c.style.filter=""; }); setTimeout(()=>f.classList.remove("animating"), 300); }
   };
-  window.addEventListener("pointerup", end); window.addEventListener("pointercancel", end);
+  window.addEventListener("pointerup", end); window.addEventListener("pointercancel", ()=>{active=false;renderFeed();});
   let wheelLock = 0;
   f.addEventListener("wheel", e => { e.preventDefault(); const now = Date.now(); if(now - wheelLock < 650 || Math.abs(e.deltaY) < 12) return; wheelLock = now; go(e.deltaY > 0 ? 1 : -1); }, {passive:false});
   document.addEventListener("keydown", e => {
@@ -524,6 +557,8 @@ function openDrawer(){ $("#drawer").classList.add("open"); $("#scrim").classList
 function closeDrawer(){ $("#drawer").classList.remove("open"); $("#scrim").classList.remove("on"); $("#drawer").setAttribute("aria-hidden","true"); }
 
 function bindStatic(){
+  $('#newNews').onclick=()=>headlinePreview(true);
+  $('#headlineBrowse').onclick=()=>headlinePreview();
   $("#btnMenu").onclick = openDrawer; $("#btnClose").onclick = closeDrawer; $("#scrim").onclick = closeDrawer;
   $("#btnLock").onclick = () => window.Admin && Admin.open();
   $("#btnAdmin2").onclick = () => { closeDrawer(); window.Admin && Admin.open(); };
@@ -569,7 +604,7 @@ function afterFilter(){ if(S.tab==="my"||S.tab==="bm") S.tab = "all"; S.idx = 0;
 
 /* ---------------- modal + toast ---------------- */
 function openModal(html, cls){ const m = $("#modal"); $("#sheet").className = "sheet " + (cls||""); $("#sheet").innerHTML = html; m.hidden = false; requestAnimationFrame(()=>m.classList.add("on")); }
-function closeModal(){ const m = $("#modal"); m.classList.remove("on"); setTimeout(()=>{ m.hidden = true; $("#sheet").innerHTML = ""; }, 200); }
+function closeModal(){ clearTimeout(previewTimer); const m = $("#modal"); m.classList.remove("on"); setTimeout(()=>{ m.hidden = true; $("#sheet").innerHTML = ""; }, 200); }
 let tt; function toast(s){ const el = $("#toast"); el.textContent = s; el.classList.add("on"); clearTimeout(tt); tt = setTimeout(()=>el.classList.remove("on"), 2200); }
 
 window.App = { S, openModal, closeModal, toast, refresh, renderFeed, esc, textOf, openLogin, goTop(){ S.tab="all"; S.f={vibhag:null,state:null,district:null}; S.idx=0; refresh(false); renderChrome(); } };
