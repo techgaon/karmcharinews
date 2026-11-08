@@ -18,23 +18,30 @@ function updateNewsNotice(){
   const count = S.list.slice(0, S.idx).filter(n=>pendingIds.has(n.id)).length;
   const b = $('#newNews'); b.hidden = !count || S.tab === 'bm';
   b.textContent = S.uiLang === 'en' ? `↑ ${count} new ${count===1?'story':'stories'} · Tap to read` : `↑ ${count} नई ख़बरें · पढ़ने के लिए टैप करें`;
-  $('#headlineBrowse').hidden=S.idx<2;
-  $('#headlineBrowse').textContent=S.uiLang==='en'?'↑ Browse headlines':'↑ ख़बरों के शीर्षक देखें';
 }
 function headlinePreview(latest=false){
   if(S.anim) return;
   const stop = Math.min(S.idx, S.list.length), items = S.list.slice(0, stop);
   if(!items.length) return;
   const en = S.uiLang === 'en';
-  openModal(`<div class="preview-head"><h3>${en?'Headlines at a glance':'ख़बरें एक नज़र में'}</h3><button class="btn ghost" data-close>${en?'Close':'बंद करें'}</button></div><p class="note">${en?'Tap any headline to open it.':'किसी भी शीर्षक पर टैप करके ख़बर खोलें।'}</p><div class="headline-previews">${items.map((n,i)=>`<button class="headline-preview" data-preview="${i}"><span>${i+1}</span><strong>${esc(textOf(n,cardLangOf(n)).h)}</strong><small>${esc(n.source||'Karmchari News')}</small></button>`).join('')}</div><button class="btn primary wide" id="readLatest">↑ ${en?'Read latest news':'सबसे नई ख़बर पढ़ें'}</button>${latest?`<button class="btn ghost wide" id="pausePreview">${en?'Pause to read headlines':'रुककर शीर्षक पढ़ें'}</button>`:''}`, 'news-preview');
+  openModal(`<div class="preview-head"><h3>${en?'News previews':'ख़बरों की झलक'}</h3><button class="btn ghost" data-close>${en?'Close':'बंद करें'}</button></div><p class="note">${en?'Swipe through the small cards. Tap a preview to read the full story.':'छोटे कार्ड स्वाइप करें। पूरी ख़बर पढ़ने के लिए उसके preview पर टैप करें।'}</p><div class="headline-previews" aria-label="News thumbnail previews">${items.map((n,i)=>{const tx=textOf(n,cardLangOf(n));return `<button class="headline-preview" data-preview="${i}" aria-label="${esc(tx.h)}"><div class="preview-picture">${mediaHTML(n)}</div><div class="preview-brand"><img src="./icon.svg" alt="">Karmchari News <span>${i+1}/${items.length}</span></div><strong>${esc(tx.h)}</strong><p>${esc(tx.s)}</p><small>${esc(n.source||'Karmchari News')}</small></button>`}).join('')}</div><p class="preview-count" id="previewCount" aria-live="polite"></p><button class="btn primary wide" id="openPreview">${en?'Open selected story':'चुनी हुई ख़बर खोलें'}</button><button class="btn ghost wide" id="readLatest">↑ ${en?'Read latest news':'सबसे नई ख़बर पढ़ें'}</button>${latest?`<button class="btn ghost wide" id="pausePreview">${en?'Pause previews':'रुककर preview देखें'}</button>`:''}`, 'news-preview');
   const openAt = i => { clearTimeout(previewTimer); closeModal(); S.idx=i; if(i===0){pendingIds.clear();S.list.forEach(n=>knownIds.add(n.id));} renderFeed(); };
-  $('#sheet').querySelectorAll('[data-preview]').forEach(b=>b.onclick=()=>openAt(Number(b.dataset.preview)));
+  const box=$('.headline-previews'), cards=[...$('#sheet').querySelectorAll('[data-preview]')];
+  let selected=items.length-1, auto=latest;
+  const select = i => { selected=i;cards.forEach((c,j)=>{c.classList.toggle('focused',j===i);c.setAttribute('aria-current',j===i?'true':'false');});$('#previewCount').textContent=`${i+1} / ${items.length}`; };
+  const center = i => {const c=cards[i];if(c)box.scrollTo({left:c.offsetLeft-(box.clientWidth-c.offsetWidth)/2,behavior:reducedMotion()?'instant':'smooth'});select(i);};
+  cards.forEach(b=>{b.onclick=()=>openAt(Number(b.dataset.preview));b.onmouseenter=()=>select(Number(b.dataset.preview));b.onfocus=()=>select(Number(b.dataset.preview));});
+  box.addEventListener('scroll',()=>{const mid=box.scrollLeft+box.clientWidth/2;let best=0;cards.forEach((c,i)=>{if(Math.abs(c.offsetLeft+c.offsetWidth/2-mid)<Math.abs(cards[best].offsetLeft+cards[best].offsetWidth/2-mid))best=i;});select(best);},{passive:true});
+  box.addEventListener('wheel',e=>{if(Math.abs(e.deltaY)>Math.abs(e.deltaX)){e.preventDefault();box.scrollLeft+=e.deltaY;}},{passive:false});
+  const pause=()=>{auto=false;clearTimeout(previewTimer);const p=$('#pausePreview');if(p)p.hidden=true;};
+  box.addEventListener('pointerdown',pause);
+  $('#openPreview').onclick=()=>openAt(selected);
   $('#readLatest').onclick=()=>openAt(0);
+  requestAnimationFrame(()=>{const c=cards[selected];if(c)box.scrollLeft=c.offsetLeft-(box.clientWidth-c.offsetWidth)/2;select(selected);});
   if(latest){
-    const box=$('.headline-previews'); box.scrollTop=box.scrollHeight;
-    requestAnimationFrame(()=>box.scrollTo({top:0,behavior:reducedMotion()?'instant':'smooth'}));
-    previewTimer=setTimeout(()=>openAt(0),reducedMotion()?0:2200);
-    $('#pausePreview').onclick=()=>{clearTimeout(previewTimer);$('#pausePreview').hidden=true;};
+    const advance=()=>{if(!auto)return;if(selected>0){center(Math.max(0,selected-Math.max(1,Math.ceil(items.length/6))));previewTimer=setTimeout(advance,800);}else openAt(0);};
+    previewTimer=setTimeout(reducedMotion()?()=>openAt(0):advance, reducedMotion()?0:800);
+    $('#pausePreview').onclick=pause;
   }
 }
 
@@ -558,7 +565,6 @@ function closeDrawer(){ $("#drawer").classList.remove("open"); $("#scrim").class
 
 function bindStatic(){
   $('#newNews').onclick=()=>headlinePreview(true);
-  $('#headlineBrowse').onclick=()=>headlinePreview();
   $("#btnMenu").onclick = openDrawer; $("#btnClose").onclick = closeDrawer; $("#scrim").onclick = closeDrawer;
   $("#btnLock").onclick = () => window.Admin && Admin.open();
   $("#btnAdmin2").onclick = () => { closeDrawer(); window.Admin && Admin.open(); };
