@@ -5,7 +5,7 @@ const el=s=>{if(!elements.has(s))elements.set(s,{hidden:true,textContent:'',styl
 const saved={id:'old',ids:['old','older']};
 const context={window:{addEventListener:(name,fn)=>windowHandlers[name]=fn},document:{querySelector:el,querySelectorAll:()=>[],addEventListener(){}},KN_LS:{get:()=>saved,set(){}},Store:{news:[],prefs:()=>({bookmarks:[]})},Set,console,performance:{now:()=>clock},requestAnimationFrame:fn=>fn(),matchMedia:()=>({matches:false})};
 let code=fs.readFileSync('app.js','utf8');
-code=code.replace('document.addEventListener("DOMContentLoaded", boot);',`renderFeed=()=>updateNewsNotice();renderDrawer=()=>{};window.test={S,refresh,bindSwipe,pending:()=>[...pendingIds]};`);
+code=code.replace('document.addEventListener("DOMContentLoaded", boot);',`renderFeed=()=>updateNewsNotice();renderDrawer=()=>{};mediaHTML=()=>'<img src="test-news.jpg">';textOf=n=>({h:n.id,s:'Summary'});window.test={S,refresh,bindSwipe,pending:()=>[...pendingIds]};`);
 vm.runInNewContext(code,context);
 const {S,refresh}=context.window.test;
 const story=id=>({id});
@@ -23,5 +23,7 @@ handlers.pointerdown({button:0,clientX:100,clientY:100,target:{closest:()=>null}
 clock=120;windowHandlers.pointermove({clientX:105,clientY:400});windowHandlers.pointerup();
 assert.equal(el('#modal').hidden,false,'A fast downward swipe opens headline previews');
 assert.match(el('#sheet').innerHTML,/data-preview="0"/);
+assert.match(el('#sheet').innerHTML,/preview-picture/);
+assert.match(el('#sheet').innerHTML,/test-news.jpg/);
 assert.equal(S.idx,3,'Preview does not silently skip unread stories');
 console.log('PASS: resume, live insertion, update counts, top and bookmark behavior');
