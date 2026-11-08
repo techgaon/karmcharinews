@@ -6,6 +6,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import { districtFeeds, scanFeeds, priorityOrder, differentLocalities, ruralTerms } from './coverage.mjs';
+import {normalizeTags,outputSchema} from './news-tags.mjs';
 
 const CFG = JSON.parse(fs.readFileSync(new URL("./feeds.json", import.meta.url)));
 const MAX = +(process.env.MAX_PER_RUN || CFG.maxPerRun || 6);
@@ -258,6 +259,7 @@ async function gemini(it) {
   for (const model of models) for (const tools of toolSets) for (let attempt = 1; attempt <= 3; attempt++) {
     if (DEAD.has(model)) break;
     const body = { contents: [{ role: "user", parts }], generationConfig: { temperature: 0.2 } };
+    if(!tools.length){body.generationConfig.responseMimeType='application/json';body.generationConfig.responseSchema=outputSchema(CFG);}
     if (tools.length) body.tools = tools;
     if (it.video) body.generationConfig.mediaResolution = "MEDIA_RESOLUTION_LOW";
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body), signal: AbortSignal.timeout(120000) }).catch(e => ({ ok: false, status: 504, json: async () => ({ error: { message: "timeout: " + e.message } }) }));
@@ -298,9 +300,7 @@ function validate(o) {
     if (l !== "en" && !/[ऀ-ॿ]/.test(o[l].s)) return l + " not in Devanagari";
   }
   const np = numbersProblem(o); if (np) return "numbers do not match across languages: " + np;
-  if (!V.includes(o.vibhag)) o.vibhag = "all";
-  if (!S.includes(o.state)) o.state = "Other";
-  if (!o.district || !CFG.upDistricts.includes(o.district)) o.district = "All";
+  const tagsProblem=normalizeTags(o,CFG);if(tagsProblem)return tagsProblem;
   const P = o.place && typeof o.place === "object" ? o.place : {}, clean = {};
   for (const k of ["state", "district", "block", "gp"]) {
     const hi = String(P[k + "_hi"] || "").trim(), en = String(P[k + "_en"] || "").trim();
@@ -398,6 +398,18 @@ async function main() {
     await new Promise(s => setTimeout(s, MOCK ? 0 : 4000));
   }
 
+  // Repair only tags on recently published cards whose old fallback hid their locality.
+  let repaired=0;
+  if(!MOCK)for(const n of await db.recent('knNews',150)){
+    if(repaired>=12||Date.now()-T0>(+process.env.RUN_BUDGET_MIN||24)*60000)break;
+    if(!n.auto||n.vibhag!=='all'||n.state!=='Other'||n.place?.state_en||n.place?.state_hi)continue;
+    const it={title:n.origTitle||n.lang?.hi?.h||'',link:n.sourceUrl,source:n.source,date:n.pubDate};
+    await prefetch(it);if(!it.text)continue;
+    try{const o=await gemini(it);if(validate(o))continue;
+      const doc={...n,vibhag:o.vibhag,state:o.state,district:o.district,place:o.place};delete doc.id;
+      await db.set('knNews',n.id,doc);repaired++;log('tags repaired',n.id,o.state,o.district,o.vibhag);
+    }catch(e){log('tag repair deferred',e.message);if(e.quota)break;}
+  }
   // 4a. re-check recent AI stories already in the feed
   if (!MOCK) for (const n of await db.recent("knNews", 60)) {
     if (!n.auto || !n.lang?.hi || !n.lang?.en) continue;
@@ -420,7 +432,7 @@ async function main() {
   for (const id of old) await db.del("knNews", id);
   log(`done: published ${published}, skipped ${skipped}, cleaned ${old.length}`);
   for(const queued of backlog){if(Date.parse(queued.date||queued.ts)<maxAge)await db.del('knScanQueue',queued.id);}
-  fs.writeFileSync('scan-report/result.json',JSON.stringify({published,skipped,candidates:picked.length,quotaLimited:quotaFails>=2,queuedSample:backlog.length,limit:MAX},null,2));
+  fs.writeFileSync('scan-report/result.json',JSON.stringify({published,repairedTags:repaired,skipped,candidates:picked.length,quotaLimited:quotaFails>=2,queuedSample:backlog.length,limit:MAX},null,2));
   if (MOCK) return db;
 }
 const res = await main().catch(e => { console.error("FATAL", e); process.exit(1); });
