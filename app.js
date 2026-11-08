@@ -217,7 +217,7 @@ function cardHTML(n){
       <div class="meta"><span class="time">🕒 ${ago(KN_time(n))}</span>${(pl => pl ? `<span class="place"><svg class="pin" viewBox="0 0 24 24"><path d="M12 2C7.6 2 4 5.5 4 9.9 4 15.6 12 22 12 22s8-6.4 8-12.1C20 5.5 16.4 2 12 2z" fill="#EA4335"/><circle cx="12" cy="9.8" r="3.2" fill="#B31412"/></svg>${esc(pl)}</span>` : "")(placeLine(n, tx.l))}${likeBtn(n)}</div>
     </div>
     <footer class="src" data-act="${isVid?"video":"open"}">
-      <span>${t("published_on")} <b>${src}</b></span><span class="go">${isVid?t("watch_full"):t("read_full")}</span>
+      <span>Source <b>${src}</b> <span class="source-arrow" aria-hidden="true">↗</span></span><span class="go">${isVid?t("watch_full"):t("read_full")}</span>
     </footer>
   </article>`;
 }
@@ -511,7 +511,7 @@ function renderChrome(){
   document.querySelectorAll("[data-i]").forEach(el => el.textContent = t(el.dataset.i));
   document.querySelectorAll("[data-ph]").forEach(el => el.placeholder = t(el.dataset.ph));
   const tabKey = {all:"all_news", my:"my_feed", bm:"bookmarks", go:"gos"}[S.tab];
-  $("#topTitle").innerHTML = `<span class="tt-main">${t(tabKey)}</span>${activeFilterLabel()}`;
+  $("#topTitle").innerHTML = `<span class="tt-main"${S.tab==='all'?' lang="hi"':''}>${S.tab==='all'?'समस्त विभाग':t(tabKey)} <span aria-hidden="true">⌄</span></span>${activeFilterLabel()}`;
   $("#moreMenu").innerHTML = `<div class="mm-h">📰 ${t("news_lang")}</div>` +
     KN_LANGS.map(l=>`<button data-nl="${l.k}" class="${S.newsLang===l.k?"on":""}"><span>${l.label}</span>${S.newsLang===l.k?"✓":""}</button>`).join("") +
     `<div class="mm-h">🌐 ${t("ui_lang")}</div>` +
@@ -560,13 +560,13 @@ function renderDistricts(){
     list.map(d=>`<button data-d="${esc(d[0])}" class="${S.f.district===d[0]?"on":""}">${esc(S.uiLang==="en"?d[0]:d[1])}${S.uiLang==="en"?"":` <small>${esc(d[0])}</small>`}</button>`).join("") +
     (q && !list.length ? `<p class="muted sm">—</p>` : "");
 }
-function openDrawer(){ $("#drawer").classList.add("open"); $("#scrim").classList.add("on"); $("#drawer").setAttribute("aria-hidden","false"); }
-function closeDrawer(){ $("#drawer").classList.remove("open"); $("#scrim").classList.remove("on"); $("#drawer").setAttribute("aria-hidden","true"); }
+function openDrawer(){ $("#drawer").classList.add("open"); $("#scrim").classList.add("on"); $("#drawer").setAttribute("aria-hidden","false"); $('#topTitle').setAttribute('aria-expanded','true'); }
+function closeDrawer(){ $("#drawer").classList.remove("open"); $("#scrim").classList.remove("on"); $("#drawer").setAttribute("aria-hidden","true"); $('#topTitle').setAttribute('aria-expanded','false'); }
 
 function bindStatic(){
   $('#newNews').onclick=()=>headlinePreview(true);
   $("#btnMenu").onclick = openDrawer; $("#btnClose").onclick = closeDrawer; $("#scrim").onclick = closeDrawer;
-  $("#btnLock").onclick = () => window.Admin && Admin.open();
+  $("#topTitle").onclick = openDrawer;
   $("#btnAdmin2").onclick = () => { closeDrawer(); window.Admin && Admin.open(); };
   const mm = $("#moreMenu");
   $("#btnMore").onclick = e => { e.stopPropagation(); mm.hidden = !mm.hidden; if(!mm.hidden) mm.classList.remove("pop"), void mm.offsetWidth, mm.classList.add("pop"); };
