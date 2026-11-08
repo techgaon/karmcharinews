@@ -38,7 +38,20 @@ input,textarea,select{font:inherit}
 .card.cur{z-index:3;box-shadow:0 10px 30px rgba(0,0,0,.18)}
 .card.next{z-index:1;transform:scale(.92);filter:brightness(.6)}
 .card.prev{z-index:4;transform:translateY(-100%)}
-#feed.animating .card{transition:transform .32s cubic-bezier(.2,.8,.2,1),filter .32s}
+#feed.animating .card{transition:transform .46s cubic-bezier(.2,.8,.2,1),filter .46s}
+.card.cur::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(0deg,#0b254533,transparent 35%);opacity:0;transition:opacity .3s}
+#feed.animating .card.cur::after{opacity:1}
+.new-news{flex:none;align-self:center;max-width:94%;margin:5px auto;padding:10px 18px;border:1px solid #b8dbf1;border-radius:24px;background:#eef7ff;color:#0b2545;font:700 13px var(--lat);box-shadow:0 3px 12px #0b254518;cursor:pointer;animation:newsNotice .35s ease-out}
+.new-news[hidden]{display:none}
+.headline-browse{flex:none;color:var(--navy);background:#eef3f9;padding:7px;font-size:12px;font-weight:700}.headline-browse[hidden]{display:none}
+.preview-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.news-preview .headline-previews{max-height:52dvh;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;padding:4px}
+.headline-preview{display:grid;grid-template-columns:28px 1fr;gap:6px 10px;width:100%;text-align:left;border:1px solid #dce5ee;border-radius:14px;padding:16px 12px;margin:10px 0;background:#f8fbff;color:#172b46;cursor:pointer}
+.headline-preview strong{font:700 18px/1.65 var(--dev),var(--lat);overflow-wrap:anywhere}
+.headline-preview>span{grid-row:span 2;color:#e66b00;font-weight:800;padding-top:5px}
+.headline-preview small{grid-column:2;color:#64748b;font-size:12px}
+@keyframes newsNotice{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){#feed .card,.new-news,.card::after{animation:none!important;transition:none!important}.headline-previews{scroll-behavior:auto!important}}
 
 .media{position:relative;height:40%;flex:none;overflow:hidden;background:#0b2545}
 .media img,.media .art{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
