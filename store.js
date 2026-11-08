@@ -29,11 +29,11 @@ const Store = {
   },
 
   loaded: false,
-  _saveCache(list){ try{ LS.set("kn_cache", list.slice(0, 60)); }catch(e){} },
+  _saveCache(list){ try{ LS.set("kn_cache", list.slice(0, 300)); }catch(e){} },
   _markLoaded(){ if(!this.loaded){ this.loaded = true; document.dispatchEvent(new Event("kn-loaded")); } },
   async _restFirst(){
     try{
-      const P = C.firebase.projectId, url = `https://firestore.googleapis.com/v1/projects/${P}/databases/(default)/documents/knNews?pageSize=60&orderBy=ts%20desc&key=${C.firebase.apiKey}`;
+      const P = C.firebase.projectId, url = `https://firestore.googleapis.com/v1/projects/${P}/databases/(default)/documents/knNews?pageSize=300&orderBy=ts%20desc&key=${C.firebase.apiKey}`;
       const j = await fetch(url).then(r => r.ok ? r.json() : null); if(!j || this._snapDone) return;
       const val = x => x == null ? null : "stringValue" in x ? x.stringValue : "integerValue" in x ? +x.integerValue : "doubleValue" in x ? x.doubleValue
         : "booleanValue" in x ? x.booleanValue : "timestampValue" in x ? x.timestampValue : "nullValue" in x ? null

@@ -11,7 +11,7 @@ on:
       max_per_run:
         description: "Is run mein zyada se zyada kitni khabrein"
         required: false
-        default: "6"
+        default: "24"
 concurrency: { group: autonews, cancel-in-progress: false }
 jobs:
   publish:
@@ -28,5 +28,12 @@ jobs:
           FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           BACKFILL_FROM: ${{ inputs.backfill_from }}
-          MAX_PER_RUN: ${{ inputs.max_per_run || '6' }}
-          RUN_BUDGET_MIN: ${{ inputs.backfill_from && '65' || '15' }}
+          MAX_PER_RUN: ${{ inputs.max_per_run || '24' }}
+          RUN_BUDGET_MIN: ${{ inputs.backfill_from && '65' || '24' }}
+      - name: Save district scan coverage and publish results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: up-district-coverage-${{ github.run_id }}
+          path: scan-report/
+          retention-days: 14
