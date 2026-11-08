@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {districtFeeds,scanFeeds,priorityOrder,differentLocalities,ruralTerms} from '../coverage.mjs';
+const cfg=JSON.parse(fs.readFileSync(new URL('../feeds.json',import.meta.url)));
+assert.equal(cfg.upDistricts.length,75);assert.equal(cfg.districtsHi.length,75);
+const feeds=districtFeeds(cfg);
+assert.equal(feeds.length,150);assert.equal(new Set(feeds.map(x=>x.district)).size,75);
+for(const d of cfg.upDistricts){const rows=feeds.filter(x=>x.district===d);assert.deepEqual(rows.map(x=>x.topic),['panchayat','development']);for(const f of rows){const q=new URL(f.url).searchParams.get('q');assert.match(q,/उत्तर प्रदेश/);assert.match(q,/when:7d/);}}
+let active=0,peak=0;const reports=[];
+const result=await scanFeeds(feeds.slice(0,10),async f=>{active++;peak=Math.max(peak,active);await new Promise(r=>setTimeout(r,3));active--;if(f===feeds[2])throw Error('network failure');return [{title:f.name}]},(f,n,e)=>reports.push({f,n,e}),3);
+assert(peak<=3);assert.equal(reports.length,10);assert.equal(result.length,9);assert.equal(reports.filter(x=>x.e).length,1);
+const item=(district,title)=>({title,hint:{priority:true,district}});
+const ranked=priorityOrder([item('Agra','a1'),item('Agra','a2'),item('Barabanki','b1'),item('Barabanki','b2'),{title:'national'}],[{state:'UP',vibhag:'panchayat',district:'Agra',ts:new Date().toISOString()}]);
+assert.equal(ranked[0].title,'b1','An undercovered district gets priority');
+assert.equal(ranked[1].title,'a1','One district cannot occupy every candidate slot');
+assert(ranked.find(x=>x.title==='national'),'Other employee news remains included');
+assert(differentLocalities({state:'UP',district:'Agra'},{state:'UP',district:'Barabanki'}));
+assert(!differentLocalities({state:'UP',district:'Agra'},{state:'UP',district:'Agra'}));
+assert(ruralTerms.includes('मनरेगा'));assert(ruralTerms.includes('जल जीवन मिशन'));
+console.log('PASS: all 75 districts, 150 searches, bounded concurrent scans, failure reporting, district fairness and geography-safe deduplication');

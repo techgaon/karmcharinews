@@ -5,6 +5,7 @@
 // Env: GEMINI_API_KEY, FIREBASE_SA (service-account JSON), optional MAX_PER_RUN, DRY_RUN=1, MOCK=1
 import crypto from "node:crypto";
 import fs from "node:fs";
+import { districtFeeds, scanFeeds, priorityOrder, differentLocalities, ruralTerms } from './coverage.mjs';
 
 const CFG = JSON.parse(fs.readFileSync(new URL("./feeds.json", import.meta.url)));
 const MAX = +(process.env.MAX_PER_RUN || CFG.maxPerRun || 6);
@@ -22,7 +23,7 @@ const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 /* ---------------- database (Firestore via Admin SDK, or in-memory for MOCK) ---------------- */
 async function openDb() {
   if (MOCK) {
-    const mem = { knNews: new Map(), knSeen: new Map(), knConfig: new Map([["app", { autoPublish: true }]]) };
+    const mem = { knNews: new Map(), knSeen: new Map(), knScanQueue: new Map(), knConfig: new Map([["app", { autoPublish: true }]]) };
     return {
       async get(col, id) { return mem[col].get(id) || null; },
       async set(col, id, data) { mem[col].set(id, data); },
@@ -50,8 +51,8 @@ async function openDb() {
 const unxml = s => String(s || "").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 const tag = (x, t) => { const m = x.match(new RegExp(`<${t}[^>]*>([\\s\\S]*?)</${t}>`)); return m ? unxml(m[1]) : ""; };
 async function readFeed(f) {
-  const xml = MOCK ? fs.readFileSync(new URL("./mock/rss.xml", import.meta.url), "utf8")
-    : await fetch(BACKFILL ? f.url.replace(/when%3A\d+[dh]/i, "after%3A" + BACKFILL_AFTER).replace(/when:\d+[dh]/i, "after:" + BACKFILL_AFTER) : f.url, { headers: { "User-Agent": "Mozilla/5.0 KarmchariNewsBot" } }).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); });
+  const xml = MOCK ? fs.readFileSync(new URL("./rss.xml", import.meta.url), "utf8")
+    : await fetch(BACKFILL ? f.url.replace(/when%3A\d+[dh]/i, "after%3A" + BACKFILL_AFTER).replace(/when:\d+[dh]/i, "after:" + BACKFILL_AFTER) : f.url, { headers: { "User-Agent": "Mozilla/5.0 KarmchariNewsBot" }, signal:AbortSignal.timeout(15000) }).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); });
   return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(m => {
     const x = m[1]; let title = tag(x, "title"); const source = tag(x, "source");
     if (source && title.endsWith(" - " + source)) title = title.slice(0, -(source.length + 3));
@@ -98,7 +99,7 @@ async function readYouTube(ch) {
   if (!MOCK && process.env.YOUTUBE_API_KEY) return await ytFromApi(ch);
   let xml;
   try {
-    xml = MOCK ? fs.readFileSync(new URL("./mock/yt.xml", import.meta.url), "utf8")
+    xml = MOCK ? fs.readFileSync(new URL("./yt.xml", import.meta.url), "utf8")
       : await fetch("https://www.youtube.com/feeds/videos.xml?channel_id=" + await channelId(ch.id), { headers: { "User-Agent": UA } }).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); });
   } catch (e) { log("  youtube rss", ch.name || ch.id, e.message, "→ trying channel page"); return await ytFromPage(ch); }
   const chName = tag(xml, "title") || ch.name;
@@ -183,6 +184,7 @@ async function prefetch(it) {   // resolve the real article URL and read its tex
   } catch (e) { log("   article:", e.message); }
 }
 async function findImage(it, o) {
+  if(MOCK)return '';
   if (it.video) { const v = (it.link.split("v=")[1] || "").slice(0, 11); return v ? `https://i.ytimg.com/vi/${v}/hqdefault.jpg` : ""; }
   if (it.ogImage) { log("  image: found (article)"); return it.ogImage; }
   let url = it.realUrl || (isArticle(o.articleUrl) ? o.articleUrl : "");
@@ -202,14 +204,16 @@ const keyw = s => new Set(norm(s || "").filter(w => !DSTOP.has(w)));
 function ovl(a, b) { const A = keyw(a), B = keyw(b); if (!A.size || !B.size) return 0; let i = 0; A.forEach(w => B.has(w) && i++); return i / Math.min(A.size, B.size); }
 /* same event already covered? (two papers, two different headlines) */
 function isDup(a, b) {
+  if(differentLocalities(a,b))return false;
+  if((a.district==='All')!==(b.district==='All'))return false;
   const ea = a.lang?.en || a.en, eb = b.lang?.en || b.en; if (!ea?.h || !eb?.h) return false;
   if (a.vibhag !== b.vibhag) return false;
   const ta = Date.parse(a.ts) || Date.now(), tb = Date.parse(b.ts) || Date.now(); if (Math.abs(ta - tb) > 72 * 3600e3) return false;
-  return ovl(ea.h, eb.h) >= 0.45 || ovl(ea.h + " " + ea.s, eb.h + " " + eb.s) >= 0.33;
+  return ovl(ea.h, eb.h) >= 0.8 && ovl(ea.h + " " + ea.s, eb.h + " " + eb.s) >= 0.65;
 }
 const idOf = t => "a" + crypto.createHash("sha1").update(norm(t).join(" ")).digest("hex").slice(0, 16);
 const kwHit = (t, k) => /^[a-z0-9 ]{1,4}$/i.test(k) ? new RegExp(`(^|[^a-z])${k}([^a-z]|$)`, "i").test(t) : t.toLowerCase().includes(k.toLowerCase());
-const relevantByWords = t => CFG.keywords.some(k => kwHit(t, k)) && !CFG.blockWords.some(k => kwHit(t, k));
+const relevantByWords = t => [...CFG.keywords,...ruralTerms].some(k => kwHit(t, k)) && !CFG.blockWords.some(k => kwHit(t, k));
 const wc = s => String(s || "").trim().split(/\s+/).filter(Boolean).length;
 function fit(s) { const w = String(s || "").trim().split(/\s+/).filter(Boolean); if (w.length <= WORDS) return w.join(" "); let o = w.slice(0, WORDS).join(" "); if (!/[।.!?]$/.test(o)) o = o.replace(/[,;:—-]+$/, "") + (/[ऀ-ॿ]/.test(o) ? "।" : "."); return o; }
 
@@ -224,7 +228,8 @@ ${it.text}
 """` : ""}
 Steps:
 1. Open the link (or search the web for this exact headline from this publisher) and READ the actual article.
-2. Decide "relevant": true ONLY if the story directly matters to government employees/pensioners/workers in India (pay, DA, pension, transfers, recruitment of govt staff, service rules, GOs, departmental orders, strikes/demands, training, duties). Crime, politics, sports, celebrity, generic schemes for public = false.
+2. Decide "relevant": true for employee/service news OR concrete local Panchayati Raj and rural development reporting, especially Uttar Pradesh: gram panchayat/gram sabha meetings, secretary/pradhan/panchayat assistant duties, MGNREGA works/wages, development budgets/accounts/audits, gram nidhi, housing implementation, sanitation, community toilets, water projects, Amrit Sarovar, inspections, delays, corruption inquiries, and actual village/block development works. Tag these as panchayat. Do not exclude a local development story just because beneficiaries are citizens rather than employees. Generic scheme explainers, party politics, unrelated crime, sports or celebrity stories remain false.
+   Search context: ${it.hint?.district || 'not district-specific'}. This is ONLY a search hint, NEVER proof of the article's district/state. Determine tags from the article itself; do not guess a block or village.
 3. "verified": true ONLY if you could read the article or confirm its facts from reliable sources. Never guess.
 4. If relevant and verified, write ONE card in FOUR languages. Each summary EXACTLY ${WORDS} words, neutral, factual, your own words (do not copy sentences), no invented numbers, dates or names. Write every number in Western digits (0-9) and use EXACTLY the same numbers in all four languages; a number in a headline must also appear in that language's summary. Headline max 14 words.
    "hi" standard Hindi (Devanagari). "en" simple English. "aw" Awadhi in Devanagari (अहै, अउर, मा, खातिर, कहिन). "bh" Bhojpuri in Devanagari (बा, आ, में, खातिर, कहलें).
@@ -242,7 +247,7 @@ function promptVideo(it) {
 `).replace("Article:", "Video:");
 }
 async function gemini(it) {
-  if (MOCK) return JSON.parse(fs.readFileSync(new URL("./mock/gemini.json", import.meta.url), "utf8"))[it.title] || { relevant: false, verified: false, reason: "mock: unknown" };
+  if (MOCK) return JSON.parse(fs.readFileSync(new URL("./gemini.json", import.meta.url), "utf8"))[it.title] || { relevant: false, verified: false, reason: "mock: unknown" };
   const key = process.env.GEMINI_API_KEY; if (!key) throw new Error("GEMINI_API_KEY secret missing");
   const parts = it.video ? [{ file_data: { file_uri: it.link } }, { text: promptVideo(it) }] : [{ text: prompt(it) }];
   // try: chosen model with web tools → same model with fewer tools → newest "latest" aliases
@@ -316,12 +321,12 @@ async function main() {
 
   // 1. collect
   let items = [];
-  // district sweep: every run scans a rotating slice of UP's 75 districts (all 75 covered every ~2.5 hours; all of them in a backfill)
-  const DH = CFG.districtsHi || [], per = BACKFILL ? DH.length : (CFG.districtScan?.perRun || 15);
-  const slot = Math.floor(Date.now() / 1800e3) % Math.max(1, Math.ceil(DH.length / per));
-  const distFeeds = DH.slice(slot * per, slot * per + per).map(d => ({ name: "District: " + d,
-    url: "https://news.google.com/rss/search?q=" + encodeURIComponent(`"${d}" (कर्मचारी OR कर्मचारियों OR शिक्षक OR सचिव OR लेखपाल OR पंचायत OR सफाईकर्मी OR वेतन OR निलंबित OR तबादला OR संविदा) when:2d`) + "&hl=hi&gl=IN&ceid=IN:hi" }));
-  for (const f of [...CFG.feeds, ...distFeeds]) { try { const l = await readFeed(f); items.push(...l); log("feed", f.name, l.length); } catch (e) { log("feed FAIL", f.name, e.message); } }
+  const distFeeds = districtFeeds(CFG), coverage=[];
+  items=await scanFeeds([...distFeeds,...CFG.feeds],readFeed,(f,count,error)=>{coverage.push({name:f.name,district:f.district||null,count,error:error?.message||null});log(error?'feed FAIL':'feed',f.name,error?.message||count);},6);
+  fs.mkdirSync('scan-report',{recursive:true});
+  fs.writeFileSync('scan-report/coverage.json',JSON.stringify({at:new Date().toISOString(),districtsAttempted:new Set(distFeeds.map(f=>f.district)).size,feeds:coverage},null,2));
+  const backlog=await db.recent('knScanQueue',300);
+  items.push(...backlog.filter(x=>!x.nextAttempt||Date.parse(x.nextAttempt)<=Date.now()));
   const ytList = CFG.youtube.concat((app.youtubeChannels || []).filter(Boolean).map(id => ({ id: id.trim(), name: "" })));
   const seenCh = new Set();
   for (const ch of ytList) { if (seenCh.has(ch.id)) continue; seenCh.add(ch.id); try { const l = await readYouTube(ch); l.forEach(x => { x.trusted = !!ch.trusted; }); items.push(...l); log("youtube", ch.name || ch.id, l.length); } catch (e) { log("youtube FAIL", ch.id, e.message); } }
@@ -332,14 +337,17 @@ async function main() {
 
   // 2. filter + dedupe (same story from many papers → keep one)
   const recent = await db.recent("knNews", 150);
-  const recentTitles = recent.map(n => n.origTitle || (n.lang && n.lang.hi && n.lang.hi.h) || "");
+  items=priorityOrder(items,recent);
+  const nearPublished=it=>recent.some(n=>!differentLocalities(it,n)&&similar(n.origTitle||n.lang?.hi?.h||'',it.title)>0.95);
   const picked = [];
   for (const it of items) {
     if (!relevantByWords(it.title)) continue;
     it.id = idOf(it.title);
-    if (picked.some(p => p.id === it.id || similar(p.title, it.title) > 0.6)) continue;
-    if (recentTitles.some(t => similar(t, it.title) > 0.6)) continue;
-    if (await db.get("knSeen", it.id) || await db.get("knNews", it.id)) continue;
+    if (picked.some(p => p.id === it.id || (!differentLocalities(p,it)&&similar(p.title, it.title) > 0.95))) continue;
+    if (nearPublished(it)) continue;
+    const seen=await db.get('knSeen',it.id);
+    if ((seen&&(seen.result==='published'||seen.policyVersion===2)) || await db.get("knNews", it.id)) continue;
+    const queued=await db.get('knScanQueue',it.id);if(queued?.nextAttempt&&Date.parse(queued.nextAttempt)>Date.now())continue;
     picked.push(it);
     if (picked.length >= MAX * 3) break;
   }
@@ -349,11 +357,12 @@ async function main() {
     if (picked.filter(p => p.video).length >= VSEATS) break;
     if (!it.video || picked.includes(it) || !relevantByWords(it.title)) continue;
     it.id = it.id || idOf(it.title);
-    if (picked.some(p => p.id === it.id) || recentTitles.some(t => similar(t, it.title) > 0.6)) continue;
+    if (picked.some(p => p.id === it.id) || nearPublished(it)) continue;
     if (await db.get("knSeen", it.id) || await db.get("knNews", it.id)) continue;
     picked.push(it);
   }
-  picked.sort((a, b) => (b.video ? 1 : 0) - (a.video ? 1 : 0));
+  picked.sort((a,b)=>(b.hint?.priority?1:0)-(a.hint?.priority?1:0));
+  for(const it of picked){if(!await db.get('knScanQueue',it.id))await db.set('knScanQueue',it.id,{...it,ts:new Date().toISOString()});}
   log(`candidates: ${picked.length} (from ${items.length} items, ${picked.filter(p => p.video).length} videos, ${items.filter(i => i.video).length} videos read)`);
 
   // 3. AI → publish
@@ -365,14 +374,14 @@ async function main() {
     if (it.video) videos++;
     if (Date.now() - T0 > (+process.env.RUN_BUDGET_MIN || CFG.runBudgetMin || 15) * 60000) { log("time budget used — stopping, next run continues"); break; }
     log("→", it.title.slice(0, 90));
-    await prefetch(it);
-    if (!it.video && !it.text && !CFG.allowUrlContext) { log("  skip for now: article text not readable (saves Gemini quota)"); continue; }
+    if(!MOCK)await prefetch(it);
+    const retry=()=>db.set('knScanQueue',it.id,{...it,ts:new Date().toISOString(),nextAttempt:new Date(Date.now()+6*3600e3).toISOString()});
+    if (!MOCK && !it.video && !it.text && !CFG.allowUrlContext) { log("  retry later: article text not readable"); await retry();continue; }
     let o;
     try { o = await gemini(it); quotaFails = 0; } catch (e) { log("  AI error:", e.message); if (e.quota && ++quotaFails >= 2) { log("Gemini quota exhausted — stopping this run, will try again next run."); break; } continue; }
     const why = validate(o);
-    await db.set("knSeen", it.id, { ts: new Date().toISOString(), title: it.title, result: why || "published" });
-    if (why) { skipped++; log("  skip:", why); continue; }
-    const twin = recent.find(r => isDup({ vibhag: o.vibhag, en: o.en, ts: new Date().toISOString() }, r));
+    if (why) { skipped++; log("  skip:", why);if(!o.relevant){await db.set('knSeen',it.id,{ts:new Date().toISOString(),title:it.title,result:why,policyVersion:2});await db.del('knScanQueue',it.id);}else await retry(); continue; }
+    const twin = recent.find(r => isDup({ vibhag: o.vibhag,state:o.state,district:o.district, en: o.en, ts: new Date().toISOString() }, r));
     if (twin) { skipped++; log("  skip: same news already published —", (twin.lang?.hi?.h || "").slice(0, 60)); continue; }
     const doc = {
       id: it.id, vibhag: o.vibhag, state: o.state, district: o.district, type: it.video ? "video" : "image", image: await findImage(it, o), youtube: it.video ? it.link : "",
@@ -382,7 +391,9 @@ async function main() {
       place: o.place || {},
       lang: { hi: o.hi, en: o.en, aw: o.aw, bh: o.bh }
     };
-    await db.set("knNews", it.id, doc); published++; recent.unshift(doc);
+    await db.set("knNews", it.id, doc);
+    await db.set('knSeen',it.id,{ts:new Date().toISOString(),title:it.title,result:'published',policyVersion:2});await db.del('knScanQueue',it.id);
+    published++; recent.unshift(doc);
     log(`  ✓ published [${o.vibhag}/${o.state}/${o.district}] ${o.hi.h}`, DRY ? "(dry run)" : "");
     await new Promise(s => setTimeout(s, MOCK ? 0 : 4000));
   }
@@ -408,6 +419,8 @@ async function main() {
   const old = await db.autoOlderThan(new Date(Date.now() - CFG.keepDays * 864e5).toISOString());
   for (const id of old) await db.del("knNews", id);
   log(`done: published ${published}, skipped ${skipped}, cleaned ${old.length}`);
+  for(const queued of backlog){if(Date.parse(queued.date||queued.ts)<maxAge)await db.del('knScanQueue',queued.id);}
+  fs.writeFileSync('scan-report/result.json',JSON.stringify({published,skipped,candidates:picked.length,quotaLimited:quotaFails>=2,queuedSample:backlog.length,limit:MAX},null,2));
   if (MOCK) return db;
 }
 const res = await main().catch(e => { console.error("FATAL", e); process.exit(1); });
