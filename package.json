@@ -5,7 +5,7 @@
   "description": "Karmchari News — Inshorts-style employee news PWA (techgaon.in/karmcharinews)",
   "scripts": {
     "serve": "npx http-server . -p 8080 -c-1",
-    "build:www": "node scripts/build-www.js",
+    "build:www": "node build-www.js",
     "cap:add": "npm run build:www && npx cap add android",
     "cap:sync": "npm run build:www && npx cap sync android",
     "apk": "npm run cap:sync && cd android && ./gradlew assembleRelease",

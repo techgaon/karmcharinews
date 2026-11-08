@@ -1,23 +1,47 @@
 name: Build Karmchari News APK + AAB
 on: [workflow_dispatch]   # run manually: Actions → Build … → Run workflow
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20 }
+        with: { node-version: 22 }
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
       - run: npm install
       - run: npm run build:www
       - run: npx cap add android || true
       - run: npx cap sync android
+      - name: Set version and app icon
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, re, shutil
+          p = pathlib.Path('android/app/build.gradle')
+          version = 100 + int(os.environ['GITHUB_RUN_NUMBER'])
+          text = re.sub(r'versionCode \d+', f'versionCode {version}', p.read_text())
+          text = re.sub(r'versionName "[^"]+"', f'versionName "1.0.{version}"', text)
+          p.write_text(text)
+          for p in pathlib.Path('android/app/src/main/res').glob('mipmap-*'):
+              for icon in ('ic_launcher.png', 'ic_launcher_round.png', 'ic_launcher_foreground.png'):
+                  shutil.copyfile('icon-512.png', p / icon)
+          for p in pathlib.Path('android/app/src/main/res').glob('mipmap-anydpi*/*.xml'):
+              p.unlink()
+          PY
       - name: Build debug APK (installable for testing) + release AAB
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug bundleRelease
+      - name: Publish installable APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-${{ github.run_number }}
+          name: Karmchari News Android build ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          files: android/app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v4
         with:
           name: karmchari-news-android
