@@ -2,7 +2,8 @@
 // Runs on GitHub Actions every 30 min (see .github/workflows/autonews.yml):
 //   Google News RSS → employee-news filter → Gemini (reads/verifies the article,
 //   writes 100 words in Hindi, English, Awadhi, Bhojpuri) → Firestore knNews (live feed).
-// Env: GEMINI_API_KEY, FIREBASE_SA (service-account JSON), optional MAX_PER_RUN, DRY_RUN=1, MOCK=1
+// Env: GEMINI_API_KEY, GROQ_API_KEY, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN,
+// FIREBASE_SA (service-account JSON), optional MAX_PER_RUN, DRY_RUN=1, MOCK=1
 import crypto from "node:crypto";
 import fs from "node:fs";
 import { districtFeeds, scanFeeds, priorityOrder, differentLocalities, ruralTerms } from './coverage.mjs';
@@ -278,6 +279,52 @@ async function gemini(it) {
   }
   const e = new Error(lastErr || "Gemini failed"); e.quota = /HTTP 429/.test(lastErr); throw e;
 }
+async function openAICompatible(it, { name, url, key, model }) {
+  const promptText = it.video ? promptVideo(it) : prompt(it);
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: "user", content: promptText }],
+      temperature: 0.2,
+      response_format: { type: "json_object" }
+    }),
+    signal: AbortSignal.timeout(90000)
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`${name} HTTP ${r.status}: ${(j.error?.message || j.errors?.[0]?.message || "request failed").slice(0, 220)}`);
+  const raw = j.choices?.[0]?.message?.content || j.result?.response || "";
+  const obj = parseJSON(raw);
+  if (!obj) throw new Error(`${name}: model returned invalid JSON`);
+  return obj;
+}
+async function generateNews(it) {
+  const providers = [];
+  if (process.env.GEMINI_API_KEY) providers.push(["Gemini", () => gemini(it)]);
+  // These hosted fallbacks are text-only. Do not claim that they watched a video.
+  if (!it.video && process.env.GROQ_API_KEY) providers.push(["Groq", () => openAICompatible(it, {
+    name: "Groq", url: "https://api.groq.com/openai/v1/chat/completions",
+    key: process.env.GROQ_API_KEY, model: process.env.GROQ_MODEL || "openai/gpt-oss-20b"
+  })]);
+  if (!it.video && process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN) providers.push(["Cloudflare", () => openAICompatible(it, {
+    name: "Cloudflare", url: `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`,
+    key: process.env.CLOUDFLARE_API_TOKEN, model: process.env.CLOUDFLARE_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+  })]);
+  if (!providers.length) throw new Error("No AI provider configured (set GEMINI_API_KEY, GROQ_API_KEY, or Cloudflare secrets)");
+  let last;
+  for (const [name, run] of providers) {
+    try {
+      const result = await run();
+      if (name !== "Gemini") log(`   (used ${name} fallback)`);
+      return result;
+    } catch (e) {
+      last = e;
+      log(`  ${name} unavailable:`, e.message);
+    }
+  }
+  throw last || new Error("All AI providers failed");
+}
 /* ---------------- fact check: numbers must match in every language ---------------- */
 const DEV = "०१२३४५६७८९";
 const nums = t => (String(t || "").replace(/[०-९]/g, d => DEV.indexOf(d)).match(/\d+(?:\.\d+)?/g) || []).filter(n => !/^(19|20)\d\d$/.test(n));
@@ -378,7 +425,7 @@ async function main() {
     const retry=()=>db.set('knScanQueue',it.id,{...it,ts:new Date().toISOString(),nextAttempt:new Date(Date.now()+6*3600e3).toISOString()});
     if (!MOCK && !it.video && !it.text && !CFG.allowUrlContext) { log("  retry later: article text not readable"); await retry();continue; }
     let o;
-    try { o = await gemini(it); quotaFails = 0; } catch (e) { log("  AI error:", e.message); if (e.quota && ++quotaFails >= 2) { log("Gemini quota exhausted — stopping this run, will try again next run."); break; } continue; }
+    try { o = await generateNews(it); quotaFails = 0; } catch (e) { log("  AI error:", e.message); if (e.quota && ++quotaFails >= 2) { log("All AI providers unavailable — stopping this run, will try again next run."); break; } continue; }
     const why = validate(o);
     if (why) { skipped++; log("  skip:", why);if(!o.relevant){await db.set('knSeen',it.id,{ts:new Date().toISOString(),title:it.title,result:why,policyVersion:2});await db.del('knScanQueue',it.id);}else await retry(); continue; }
     const twin = recent.find(r => isDup({ vibhag: o.vibhag,state:o.state,district:o.district, en: o.en, ts: new Date().toISOString() }, r));
@@ -405,7 +452,7 @@ async function main() {
     if(!n.auto||n.vibhag!=='all'||n.state!=='Other'||n.place?.state_en||n.place?.state_hi)continue;
     const it={title:n.origTitle||n.lang?.hi?.h||'',link:n.sourceUrl,source:n.source,date:n.pubDate};
     await prefetch(it);if(!it.text)continue;
-    try{const o=await gemini(it);if(validate(o))continue;
+    try{const o=await generateNews(it);if(validate(o))continue;
       const doc={...n,vibhag:o.vibhag,state:o.state,district:o.district,place:o.place};delete doc.id;
       await db.set('knNews',n.id,doc);repaired++;log('tags repaired',n.id,o.state,o.district,o.vibhag);
     }catch(e){log('tag repair deferred',e.message);if(e.quota)break;}
@@ -437,3 +484,4 @@ async function main() {
 }
 const res = await main().catch(e => { console.error("FATAL", e); process.exit(1); });
 export default res;
+
