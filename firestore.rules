@@ -14,3 +14,14 @@ match /knConfig/{id} {
 match /knUsers/{uid} {
   allow read, write: if request.auth != null && request.auth.uid == uid;
 }
+
+// Visitor analytics: only the signed-in Google admin may read counts.
+// This is a rules FRAGMENT for the existing Firestore project, not a
+// complete replacement. Add it inside match /databases/{database}/documents.
+match /knStats/{id} {
+  allow get: if knAdmin();
+  allow list: if false;
+  // The public client must not be able to modify visitor totals.
+  // Count visits through a trusted backend using Firebase Admin SDK.
+  allow create, update, delete: if false;
+}
