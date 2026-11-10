@@ -122,12 +122,18 @@ const Store = {
   /* ---------- visitor counter (admin-only view) ---------- */
   countVisit(){
     try{
-      if(sessionStorage.getItem("kn_vc") || sessionStorage.getItem("kn_admin")) return; sessionStorage.setItem("kn_vc", "1");
-      const day = KN_istDay(), first = localStorage.getItem("kn_vday") !== day; localStorage.setItem("kn_vday", day);
+      if(sessionStorage.getItem("kn_vc") || sessionStorage.getItem("kn_vc_pending") || sessionStorage.getItem("kn_admin") || this.isAdminEmail()) return;
+      sessionStorage.setItem("kn_vc_pending", "1");
+      const day = KN_istDay(), first = localStorage.getItem("kn_vday") !== day;
       const inc = firebase.firestore.FieldValue.increment, data = {v: inc(1), u: inc(first ? 1 : 0)};
-      const col = this._db.collection("knStats");
-      col.doc("d" + day).set(data, {merge:true}).catch(()=>{}); col.doc("total").set(data, {merge:true}).catch(()=>{});
-    }catch(e){}
+      const col = this._db.collection("knStats"), batch = this._db.batch();
+      batch.set(col.doc("d" + day), data, {merge:true}); batch.set(col.doc("total"), data, {merge:true});
+      batch.commit().then(()=>{
+        sessionStorage.setItem("kn_vc", "1"); sessionStorage.removeItem("kn_vc_pending"); localStorage.setItem("kn_vday", day);
+      }).catch(e=>{
+        sessionStorage.removeItem("kn_vc_pending"); console.warn("visitor counter write", e);
+      });
+    }catch(e){ sessionStorage.removeItem("kn_vc_pending"); console.warn("visitor counter write", e); }
   },
   async visitStats(days){
     const col = this._db.collection("knStats"), ids = ["total"];
