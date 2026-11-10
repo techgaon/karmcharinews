@@ -252,30 +252,44 @@ async function gemini(it) {
   if (MOCK) return JSON.parse(fs.readFileSync(new URL("./gemini.json", import.meta.url), "utf8"))[it.title] || { relevant: false, verified: false, reason: "mock: unknown" };
   const key = process.env.GEMINI_API_KEY; if (!key) throw new Error("GEMINI_API_KEY secret missing");
   const parts = it.video ? [{ file_data: { file_uri: it.link } }, { text: promptVideo(it) }] : [{ text: prompt(it) }];
-  // try: chosen model with web tools → same model with fewer tools → newest "latest" aliases
+  // Articles move to another model after one short retry; video checks retain more time because Gemini is their only provider.
   const models = [...new Set([MODEL, ...(CFG.fallbackModels || ["gemini-flash-latest", "gemini-flash-lite-latest"])])];
-  // Google Search grounding has its own (often zero) free quota, so it is used only if CFG.useSearch is true
   const toolSets = it.video ? (CFG.useSearch ? [[{ google_search: {} }], []] : [[]]) : it.text ? [[]] : (CFG.useSearch ? [[{ url_context: {} }, { google_search: {} }], [{ url_context: {} }]] : [[{ url_context: {} }]]);
+  const toolPlans = it.video ? toolSets : [...new Map(toolSets.map(t => [JSON.stringify(t), t])).values()];
+  const timeoutMs = it.video ? 120000 : 35000;
   let lastErr = "";
-  for (const model of models) for (const tools of toolSets) for (let attempt = 1; attempt <= 3; attempt++) {
-    if (DEAD.has(model)) break;
-    const body = { contents: [{ role: "user", parts }], generationConfig: { temperature: 0.2 } };
-    if(!tools.length){body.generationConfig.responseMimeType='application/json';body.generationConfig.responseSchema=outputSchema(CFG);}
-    if (tools.length) body.tools = tools;
-    if (it.video) body.generationConfig.mediaResolution = "MEDIA_RESOLUTION_LOW";
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body), signal: AbortSignal.timeout(120000) }).catch(e => ({ ok: false, status: 504, json: async () => ({ error: { message: "timeout: " + e.message } }) }));
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      lastErr = `${model} [${tools.map(t => Object.keys(t)[0]).join("+") || "no tools"}] HTTP ${r.status}: ${(j.error?.message || "").slice(0, 220)}`;
-      log("  ", lastErr);
-      if (r.status === 503 || r.status === 500 || r.status === 504) { await new Promise(s => setTimeout(s, 12000 * attempt)); continue; }   // overloaded → wait and retry same model
-      if (r.status === 429 && /quota/i.test(j.error?.message || "")) DEAD.add(model);
-      break;   // 429 / 4xx → try next tool set / model
+  modelLoop: for (const model of models) {
+    if (DEAD.has(model)) continue;
+    for (let toolIndex = 0; toolIndex < toolPlans.length; toolIndex++) {
+      if (DEAD.has(model)) break;
+      const tools = toolPlans[toolIndex];
+      const maxAttempts = it.video ? 3 : (model === MODEL && toolIndex === 0 ? 2 : 1);
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const body = { contents: [{ role: "user", parts }], generationConfig: { temperature: 0.2 } };
+        if(!tools.length){body.generationConfig.responseMimeType='application/json';body.generationConfig.responseSchema=outputSchema(CFG);}
+        if (tools.length) body.tools = tools;
+        if (it.video) body.generationConfig.mediaResolution = "MEDIA_RESOLUTION_LOW";
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs) }).catch(e => ({ ok: false, status: 504, json: async () => ({ error: { message: "timeout: " + e.message } }) }));
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          lastErr = `${model} [${tools.map(t => Object.keys(t)[0]).join("+") || "no tools"}] HTTP ${r.status}: ${(j.error?.message || "").slice(0, 220)}`;
+          log("  ", lastErr);
+          if (r.status === 503 || r.status === 500 || r.status === 504) {
+            if (attempt < maxAttempts) {
+              await new Promise(s => setTimeout(s, it.video ? 12000 * attempt : 1500));
+              continue;
+            }
+            continue modelLoop;
+          }
+          if (r.status === 429 && /quota/i.test(j.error?.message || "")) DEAD.add(model);
+          break;   // quota/other errors: try a simpler request or the next model
+        }
+        const raw = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
+        const obj = parseJSON(raw); if (!obj) { lastErr = model + ": no JSON in reply"; break; }
+        if (model !== MODEL || tools.length < toolPlans[0].length) log("   (used " + model + " " + (tools.map(t => Object.keys(t)[0]).join("+") || "no tools") + ")");
+        return obj;
+      }
     }
-    const raw = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
-    const obj = parseJSON(raw); if (!obj) { lastErr = model + ": no JSON in reply"; break; }
-    if (model !== MODEL || tools.length < toolSets[0].length) log("   (used " + model + " " + (tools.map(t => Object.keys(t)[0]).join("+") || "no tools") + ")");
-    return obj;
   }
   const e = new Error(lastErr || "Gemini failed"); e.quota = /HTTP 429/.test(lastErr); throw e;
 }
