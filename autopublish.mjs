@@ -288,6 +288,7 @@ async function openAICompatible(it, { name, url, key, model }) {
       model,
       messages: [{ role: "user", content: promptText }],
       temperature: 0.2,
+      max_tokens: 4096,
       response_format: { type: "json_object" }
     }),
     signal: AbortSignal.timeout(90000)
