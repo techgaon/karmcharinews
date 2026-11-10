@@ -293,7 +293,11 @@ async function openAICompatible(it, { name, url, key, model }) {
     signal: AbortSignal.timeout(90000)
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(`${name} HTTP ${r.status}: ${(j.error?.message || j.errors?.[0]?.message || "request failed").slice(0, 220)}`);
+  if (!r.ok) {
+    const e = new Error(`${name} HTTP ${r.status}: ${(j.error?.message || j.errors?.[0]?.message || "request failed").slice(0, 220)}`);
+    e.quota = r.status === 429;
+    throw e;
+  }
   const raw = j.choices?.[0]?.message?.content || j.result?.response || "";
   const obj = parseJSON(raw);
   if (!obj) throw new Error(`${name}: model returned invalid JSON`);
@@ -312,7 +316,7 @@ async function generateNews(it) {
     key: process.env.CLOUDFLARE_API_TOKEN, model: process.env.CLOUDFLARE_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
   })]);
   if (!providers.length) throw new Error("No AI provider configured (set GEMINI_API_KEY, GROQ_API_KEY, or Cloudflare secrets)");
-  let last;
+  let last, quotaLimited = false;
   for (const [name, run] of providers) {
     try {
       const result = await run();
@@ -320,9 +324,11 @@ async function generateNews(it) {
       return result;
     } catch (e) {
       last = e;
+      quotaLimited ||= !!e.quota;
       log(`  ${name} unavailable:`, e.message);
     }
   }
+  if (last && quotaLimited) last.quota = true;
   throw last || new Error("All AI providers failed");
 }
 /* ---------------- fact check: numbers must match in every language ---------------- */
