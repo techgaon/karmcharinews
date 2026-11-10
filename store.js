@@ -82,9 +82,10 @@ const Store = {
   /* ---------- users ---------- */
   onUser(cb){ this._userCbs.push(cb); cb(this.user); },
   _emitUser(){ this._userCbs.forEach(cb=>cb(this.user)); },
-  async signInGoogle(simName, simEmail){
+  async signInGoogle(simName, simEmail, selectAccount=false){
     if(this.live){
       const prov = new firebase.auth.GoogleAuthProvider();
+      if(selectAccount) prov.setCustomParameters({prompt:"select_account"});
       await this._auth.signInWithPopup(prov);
       return;
     }
