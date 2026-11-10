@@ -316,14 +316,32 @@ async function fetchRss(){
 let timer = null;
 function schedule(){ clearInterval(timer); const c = rssCfg(); if(c.on && unlocked()) timer = setInterval(fetchRss, c.every*60000); }
 
-/* ---------- Visitors (only admin can read knStats) ---------- */
+/* ---------- Visitors (Firestore keeps knStats admin-only) ---------- */
+function showVisitorSignIn(message=""){
+  const box = $("#admBody"), admins = KN_CONFIG.adminEmails || [];
+  const current = Store._auth?.currentUser?.email || Store.user?.email || "";
+  box.innerHTML = `<p class="note">🔒 Visitor counts are private. To open them, sign in with the authorized admin Google account: <b>${esc(admins.join(", "))}</b>. The Admin PIN unlocks this panel; Google sign-in verifies access to the visitor records.${current?`<br><small>Current account: ${esc(current)}</small>`:""}${message?`<br><small>${esc(message)}</small>`:""}</p>
+    <button class="btn primary wide" id="vsGoogle">Sign in with admin Google account</button>`;
+  $("#vsGoogle").onclick = async e => {
+    const btn = e.currentTarget; btn.disabled = true; btn.textContent = "Opening Google sign-in…";
+    try{
+      await Store.signInGoogle(null, null, true);
+      const u = Store._auth?.currentUser, email = (u?.email || Store.user?.email || "").toLowerCase();
+      if(u && admins.some(x=>x.toLowerCase()===email)){
+        Store.user = {uid:u.uid, name:u.displayName||"Reader", email, photo:u.photoURL||""};
+        renderStats();
+      }else showVisitorSignIn(email ? `Google account ${email} is not authorized. Choose the admin account and try again.` : "Google did not return an account. Please try again.");
+    }catch(err){ showVisitorSignIn(err.message || "Google sign-in could not be completed."); }
+  };
+}
 async function renderStats(){
   const box = $("#admBody");
   if(!Store.live){ box.innerHTML = `<p class="note">Visitor counter works only in LIVE mode.</p>`; return; }
+  if(!Store.isAdminEmail()){ showVisitorSignIn(); return; }
   box.innerHTML = `<p class="muted">⏳ Loading visitors…</p>`;
   let rows;
   try{ rows = await Store.visitStats(30); }
-  catch(e){ box.innerHTML = `<p class="note">🔒 Visitor numbers are visible only when you are signed in with the admin Google account (${esc(KN_CONFIG.adminEmails[0])}).<br><small>${esc(e.message||"")}</small></p>`; return; }
+  catch(e){ box.innerHTML = `<p class="note">The admin account is signed in, but Firestore could not read visitor records. Confirm that the admin-only knStats rules are deployed.<br><small>${esc(e.message||"")}</small></p><button class="btn ghost wide" id="vsR">🔄 Retry</button>`; $("#vsR").onclick = renderStats; return; }
   const tot = rows[0], days = rows.slice(1), today = days[0], yest = days[1];
   const sum = (a, k) => a.reduce((x, r) => x + r[k], 0), w7 = days.slice(0, 7), max = Math.max(1, ...days.slice(0, 14).map(r => r.v));
   const fmt = n => n.toLocaleString("en-IN"), dl = id => { const d = new Date(id.slice(1) + "T00:00:00"); return d.toLocaleDateString("en-IN", {day:"numeric", month:"short"}); };
@@ -336,7 +354,7 @@ async function renderStats(){
   </div>
   <h3 style="margin-top:16px">Last 14 days (visits)</h3>
   <div class="vbars">${days.slice(0, 14).reverse().map(r => `<div class="vb"><i style="height:${Math.round(r.v / max * 100)}%"><em>${r.v || ""}</em></i><small>${dl(r.id)}</small></div>`).join("")}</div>
-  <p class="muted sm">Visitors = unique phones/browsers per day. Visits = how many times the app was opened. Your own visits after admin login are not counted. Only the admin can see these numbers.</p>
+  <p class="muted sm">Visitors = unique phones/browsers per day. Visits = app opens. Signed-in admin sessions are not counted. Only the authorized admin Google account can see these numbers.</p>
   <button class="btn ghost wide" id="vsR">🔄 Refresh</button>`;
   $("#vsR").onclick = renderStats;
 }
