@@ -279,6 +279,7 @@ async function gemini(it) {
               await new Promise(s => setTimeout(s, it.video ? 12000 * attempt : 1500));
               continue;
             }
+            if (it.video) break;  // preserve the simpler Gemini video request before moving to another model
             continue modelLoop;
           }
           if (r.status === 429 && /quota/i.test(j.error?.message || "")) DEAD.add(model);
