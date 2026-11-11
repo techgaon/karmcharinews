@@ -364,10 +364,13 @@ function onCardClick(e){
 
 /* ---------------- actions ---------------- */
 function storyUrl(n){ return KN_CONFIG.shareUrl + "#n=" + encodeURIComponent(n.id); }
+const SITE_URL = "https://techgaon.in/karmcharinews/";
 function shareCaption(n){
   const en = cardLangOf(n) === "en";
-  return (en ? "Every employee news in just 100 words. Read on Karmchari News 👇\n" : "कर्मचारियों की हर ख़बर सिर्फ़ 100 शब्दों में। पढ़ें Karmchari News पर 👇\n") + storyUrl(n);
+  return (en ? "Every employee news in just 100 words. Read on Karmchari News 👇\n" : "कर्मचारियों की हर ख़बर सिर्फ़ 100 शब्दों में। पढ़ें Karmchari News पर 👇\n") + SITE_URL;
 }
+/* WhatsApp often drops the text that comes with an image — keep the caption on the clipboard too, so it can be pasted */
+async function copyCaption(n){ try{ await navigator.clipboard.writeText(shareCaption(n)); }catch(_){} }
 function shareText(n){ const tx = textOf(n, cardLangOf(n)); return `*${tx.h}*\n\n${tx.s}\n\n📰 Karmchari News — ${KN_CONFIG.tagline}\n${storyUrl(n)}`; }
 /* ---- Inshorts-style share card (image) ---- */
 const SHARE_CACHE = {}, SHARE_PENDING = {};
@@ -446,12 +449,12 @@ async function shareCard(n, viaWa){
   let file = null;
   if(navigator.canShare){ const key = n.id + "|" + cardLangOf(n); if(!SHARE_CACHE[key]) toast(cardLangOf(n)==="en" ? "Preparing card…" : "कार्ड तैयार हो रहा है…"); try{ file = await (SHARE_PENDING[key] || makeShareImage(n)); }catch(e){ file = null; } }
   if(file && navigator.canShare({files:[file]})){
-    try{ await navigator.share({files:[file], text: shareCaption(n)}); return; }
+    try{ copyCaption(n); await navigator.share({files:[file], title: "Karmchari News", text: shareCaption(n)}); return; }
     catch(e){
       if(e.name === "AbortError") return;
       if(e.name === "NotAllowedError"){ // user gesture expired while drawing — ask for one more tap
         openModal(`<h3>${t("share")}</h3><img src="${URL.createObjectURL(file)}" style="width:100%;border-radius:12px;margin:8px 0" alt=""><button class="btn primary" id="shNow" style="width:100%">📤 ${t("share")}</button>`);
-        $("#shNow").onclick = async () => { try{ await navigator.share({files:[file], text: shareCaption(n)}); }catch(_){} closeModal(); };
+        $("#shNow").onclick = async () => { try{ copyCaption(n); await navigator.share({files:[file], title: "Karmchari News", text: shareCaption(n)}); }catch(_){} closeModal(); };
         return;
       }
     }
