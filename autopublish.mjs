@@ -222,6 +222,7 @@ function fit(s) { const w = String(s || "").trim().split(/\s+/).filter(Boolean);
 /* ---------------- Gemini ---------------- */
 function prompt(it) {
   return `You are the news editor of "Karmchari News", an Inshorts-style app for Indian government employees (Panchayati Raj, teachers/education, revenue/Lekhpal, police/Home Guard, health/ASHA/Anganwadi, finance/DA/pay/pension, all employees).
+${it.extraNote ? it.extraNote + "\n" : ""}SUMMARY RULE: write every summary in your OWN words as a crisp news brief (who, what, when, where, why it matters to employees). NEVER copy the article's opening lines or any sentence word-for-word.
 Article: "${it.title}" — published by ${it.source || "unknown"} on ${it.date || "unknown date"}.
 Link: ${it.realUrl || it.link}${it.text ? `
 ARTICLE TEXT (fetched from the publisher; this is the article — read it, it counts as reading the article):
@@ -358,6 +359,20 @@ function numbersProblem(o) {
   for (const l of ["aw", "bh"]) for (const n of nums(o[l].h + " " + o[l].s)) if (!hiAll.has(n)) return `number ${n} in ${l} but not in Hindi`;
   return "";
 }
+/* publisher name only — models sometimes glue extra JSON keys/URLs onto sourceName */
+function cleanSource(name, fallback) {
+  let s = String(name || "").split(/articleUrl|https?:|www\.|[\u3000-\u9fff\uac00-\ud7af]|[{}"<>|]/i)[0].replace(/[\s,;:—–-]+$/, "").trim();
+  if (!s || s.length > 40) s = String(fallback || "").replace(/^https?:\/\/(www\.)?/, "").split("/")[0];
+  return s.slice(0, 40) || "News";
+}
+/* did the model just copy the article's lines instead of summarising? share of 6-word chunks found verbatim in the article */
+function copiedFrom(text, summary) {
+  const tok = x => String(x || "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
+  const A = tok(text).join(" "), S = tok(summary); if (!A || S.length < 20) return 0;
+  let hit = 0, tot = 0;
+  for (let i = 0; i + 6 <= S.length; i += 3) { tot++; if (A.includes(S.slice(i, i + 6).join(" "))) hit++; }
+  return tot ? hit / tot : 0;
+}
 function validate(o) {
   const V = ["panchayat", "shiksha", "revenue", "police", "health", "finance", "all"], S = ["UP", "Bihar", "MP", "Rajasthan", "Uttarakhand", "National", "Other"];
   if (!o.relevant) return "not employee news: " + (o.reason || "");
@@ -448,13 +463,20 @@ async function main() {
     if (!MOCK && !it.video && !it.text && !CFG.allowUrlContext) { log("  retry later: article text not readable"); await retry();continue; }
     let o;
     try { o = await generateNews(it); quotaFails = 0; } catch (e) { log("  AI error:", e.message); if (e.quota && ++quotaFails >= 2) { log("All AI providers unavailable — stopping this run, will try again next run."); break; } continue; }
+    if (o && it.text && copiedFrom(it.text, o.hi?.s) > 0.3) {
+      log("  summary copies the article — asking AI to rewrite");
+      it.extraNote = "IMPORTANT: your previous answer copied sentences from the article. Rewrite all four summaries completely in your own words.";
+      try { o = await generateNews(it); } catch (e) { log("  AI error:", e.message); continue; }
+      delete it.extraNote;
+      if (copiedFrom(it.text, o.hi?.s) > 0.3) { skipped++; log("  skip: summary still copies the article"); await retry(); continue; }
+    }
     const why = validate(o);
     if (why) { skipped++; log("  skip:", why);if(!o.relevant){await db.set('knSeen',it.id,{ts:new Date().toISOString(),title:it.title,result:why,policyVersion:2});await db.del('knScanQueue',it.id);}else await retry(); continue; }
     const twin = recent.find(r => isDup({ vibhag: o.vibhag,state:o.state,district:o.district, en: o.en, ts: new Date().toISOString() }, r));
     if (twin) { skipped++; log("  skip: same news already published —", (twin.lang?.hi?.h || "").slice(0, 60)); continue; }
     const doc = {
       id: it.id, vibhag: o.vibhag, state: o.state, district: o.district, type: it.video ? "video" : "image", image: await findImage(it, o), youtube: it.video ? it.link : "",
-      icon: it.video ? "🎬" : o.isGO ? "📄" : ICON[o.vibhag], source: it.video ? it.source : (o.sourceName || it.source || "News"), sourceUrl: it.realUrl || it.link,
+      icon: it.video ? "🎬" : o.isGO ? "📄" : ICON[o.vibhag], source: it.video ? it.source : cleanSource(o.sourceName, it.source || it.realUrl), sourceUrl: it.realUrl || it.link,
       isGO: !!o.isGO, pinned: false, isDemo: false, ai: true, auto: true, origTitle: it.title,
       ts: (d => d && d < Date.now() ? new Date(d) : new Date())(Date.parse(it.date)).toISOString(), pubDate: it.date || "",
       place: o.place || {},
