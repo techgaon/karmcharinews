@@ -19,7 +19,7 @@ const Store = {
       // 1) show last-seen stories instantly, 2) fetch fresh list over REST while the Firebase SDK loads
       const cache = LS.get("kn_cache", []);
       if(cache.length){ this._liveList = cache; this._emitNews(cache); }
-      this._restFirst();
+      if(!(cache.length && Date.now() - LS.get("kn_cache_t", 0) < 5*60e3)) this._restFirst();   // fresh cache → skip the extra REST read
       try { await this._initFirebase(); this.countVisit(); return; }
       catch(e){ console.error("Firebase failed, falling back to preview", e); this.live = false; }
     }
@@ -29,11 +29,26 @@ const Store = {
   },
 
   loaded: false,
-  _saveCache(list){ try{ LS.set("kn_cache", list.slice(0, 300)); }catch(e){} },
+  _saveCache(list){ try{ LS.set("kn_cache", list.slice(0, 120)); LS.set("kn_cache_t", Date.now()); }catch(e){} },
+  /* Firebase counts every read: keep only the newest 40 live, load older stories 60 at a time near the end */
+  _older: [], _moreBusy: false, _moreDone: false,
+  _joined(top){ const seen = new Set(top.map(n=>n.id)); return top.concat(this._older.filter(n=>!seen.has(n.id))); },
+  async loadMore(){
+    if(!this.live || !this._db || this._moreBusy || this._moreDone) return;
+    const all = this._liveList || [], last = all[all.length-1]; if(!last || !last.ts) return;
+    this._moreBusy = true;
+    try{
+      const s = await this._db.collection("knNews").orderBy("ts","desc").startAfter(last.ts).limit(60).get();
+      const more = s.docs.map(d=>Object.assign({id:d.id}, d.data()));
+      if(more.length < 60) this._moreDone = true;
+      this._older = this._older.concat(more); this._liveList = this._joined(this._top || all); this._emitNews(this._liveList);
+    }catch(e){ console.warn("more", e); }
+    this._moreBusy = false;
+  },
   _markLoaded(){ if(!this.loaded){ this.loaded = true; document.dispatchEvent(new Event("kn-loaded")); } },
   async _restFirst(){
     try{
-      const P = C.firebase.projectId, url = `https://firestore.googleapis.com/v1/projects/${P}/databases/(default)/documents/knNews?pageSize=300&orderBy=ts%20desc&key=${C.firebase.apiKey}`;
+      const P = C.firebase.projectId, url = `https://firestore.googleapis.com/v1/projects/${P}/databases/(default)/documents/knNews?pageSize=40&orderBy=ts%20desc&key=${C.firebase.apiKey}`;
       const j = await fetch(url).then(r => r.ok ? r.json() : null); if(!j || this._snapDone) return;
       const val = x => x == null ? null : "stringValue" in x ? x.stringValue : "integerValue" in x ? +x.integerValue : "doubleValue" in x ? x.doubleValue
         : "booleanValue" in x ? x.booleanValue : "timestampValue" in x ? x.timestampValue : "nullValue" in x ? null
@@ -153,9 +168,10 @@ const Store = {
       s.docChanges().forEach(ch => { this._likes[ch.doc.id] = ch.doc.data().c || 0; delete this._likeAdj[ch.doc.id]; });
       document.querySelectorAll(".card[data-id] .like .lc").forEach(el => { const id = el.closest(".card").dataset.id; const c = this.likes(id); el.textContent = c ? (c >= 1000 ? (c/1000).toFixed(1) + "K" : c) : ""; });
     }, ()=>{});
-    this._db.collection("knNews").orderBy("ts","desc").limit(300).onSnapshot(s=>{
+    this._db.collection("knNews").orderBy("ts","desc").limit(40).onSnapshot(s=>{
       this._snapDone = true;
-      this._liveList = s.docs.map(d=>Object.assign({id:d.id}, d.data())); this._saveCache(this._liveList); this._emitNews(this._liveList); this._markLoaded();
+      this._top = s.docs.map(d=>Object.assign({id:d.id}, d.data()));
+      this._liveList = this._joined(this._top); this._saveCache(this._liveList); this._emitNews(this._liveList); this._markLoaded();
     }, e=>console.warn("news read", e));
     await new Promise(res=>{
       this._auth.onAuthStateChanged(async u=>{
