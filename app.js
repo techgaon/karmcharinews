@@ -24,7 +24,7 @@ function headlinePreview(latest=false){
   const stop = Math.min(S.idx, S.list.length), items = S.list.slice(0, stop);
   if(!items.length) return;
   const en = S.uiLang === 'en';
-  openModal(`<div class="preview-head"><h3>${en?'News previews':'ख़बरों की झलक'}</h3><button class="btn ghost" data-close>${en?'Close':'बंद करें'}</button></div><p class="note">${en?'Swipe through the small cards. Tap a preview to read the full story.':'छोटे कार्ड स्वाइप करें। पूरी ख़बर पढ़ने के लिए उसके preview पर टैप करें।'}</p><div class="headline-previews" aria-label="News thumbnail previews">${items.map((n,i)=>{const tx=textOf(n,cardLangOf(n));return `<button class="headline-preview" data-preview="${i}" aria-label="${esc(tx.h)}"><div class="preview-picture">${mediaHTML(n)}</div><div class="preview-brand"><img src="./icon.svg" alt="">Karmchari News <span>${i+1}/${items.length}</span></div><strong>${esc(tx.h)}</strong><p>${esc(tx.s)}</p><small>${esc(n.source||'Karmchari News')}</small></button>`}).join('')}</div><p class="preview-count" id="previewCount" aria-live="polite"></p><button class="btn primary wide" id="openPreview">${en?'Open selected story':'चुनी हुई ख़बर खोलें'}</button><button class="btn ghost wide" id="readLatest">↑ ${en?'Read latest news':'सबसे नई ख़बर पढ़ें'}</button>${latest?`<button class="btn ghost wide" id="pausePreview">${en?'Pause previews':'रुककर preview देखें'}</button>`:''}`, 'news-preview');
+  openModal(`<div class="preview-head"><h3>${en?'News previews':'ख़बरों की झलक'}</h3><button class="btn ghost" data-close>${en?'Close':'बंद करें'}</button></div><p class="note">${en?'Swipe through the small cards. Tap a preview to read the full story.':'छोटे कार्ड स्वाइप करें। पूरी ख़बर पढ़ने के लिए उसके preview पर टैप करें।'}</p><div class="headline-previews" aria-label="News thumbnail previews">${items.map((n,i)=>{const tx=textOf(n,cardLangOf(n));return `<button class="headline-preview" data-preview="${i}" aria-label="${esc(tx.h)}"><div class="preview-picture">${mediaHTML(n)}</div><div class="preview-brand"><img src="./icon.svg" alt="">Karmchari News <span>${i+1}/${items.length}</span></div><strong>${esc(tx.h)}</strong><p>${esc(tx.s)}</p><small>${esc(srcName(n))}</small></button>`}).join('')}</div><p class="preview-count" id="previewCount" aria-live="polite"></p><button class="btn primary wide" id="openPreview">${en?'Open selected story':'चुनी हुई ख़बर खोलें'}</button><button class="btn ghost wide" id="readLatest">↑ ${en?'Read latest news':'सबसे नई ख़बर पढ़ें'}</button>${latest?`<button class="btn ghost wide" id="pausePreview">${en?'Pause previews':'रुककर preview देखें'}</button>`:''}`, 'news-preview');
   const openAt = i => { clearTimeout(previewTimer); closeModal(); S.idx=i; if(i===0){pendingIds.clear();S.list.forEach(n=>knownIds.add(n.id));} renderFeed(); };
   const box=$('.headline-previews'), cards=[...$('#sheet').querySelectorAll('[data-preview]')];
   let selected=items.length-1, auto=latest;
@@ -199,7 +199,7 @@ function cardHTML(n){
   const cl = cardLangOf(n), tx = textOf(n, cl), p = Store.prefs();
   const bm = p.bookmarks.includes(n.id);
   const isVid = n.type === "video";
-  const src = esc(n.source || "Karmchari News");
+  const src = esc(srcName(n));
   return `<article class="card" data-id="${esc(n.id)}" lang="${tx.l==="en"?"en":"hi"}">
     ${mediaHTML(n)}
     <div class="strip">
@@ -363,6 +363,11 @@ function onCardClick(e){
 }
 
 /* ---------------- actions ---------------- */
+/* publisher name only — never a URL or AI leftovers like "Amar Ujala…articleUrlhttps://…" */
+function srcName(n){
+  const s = String(n.source || "").split(/articleUrl|https?:|www\.|[{}"|\[\]]/i)[0].replace(/[^\p{Script=Latin}\p{Script=Devanagari}0-9 .&'()\-—]/gu, "").replace(/\s+/g, " ").trim().slice(0, 40);
+  return s || "Karmchari News";
+}
 function storyUrl(n){ return KN_CONFIG.shareUrl + "#n=" + encodeURIComponent(n.id); }
 const SITE_URL = "https://techgaon.in/karmcharinews/";
 function shareCaption(n){
@@ -438,7 +443,7 @@ async function makeShareImage(n){
   // bottom bar
   ctx.fillStyle = "#0b2545"; ctx.fillRect(0, H - 120, W, 120);
   ctx.fillStyle = "#fff"; ctx.font = `600 28px ${dev}`; ctx.textBaseline = "middle";
-  ctx.fillText((en ? "Source: " : "स्रोत: ") + (n.source || "Karmchari News"), PAD, H - 78);
+  ctx.fillText((en ? "Source: " : "स्रोत: ") + srcName(n), PAD, H - 78);
   ctx.fillStyle = "#ffb347"; ctx.font = '700 28px "Inter",sans-serif'; ctx.fillText("techgaon.in/karmcharinews", PAD, H - 38);
   const blob = await new Promise(r => { try{ c.toBlob(r, "image/jpeg", 0.88); }catch(e){ r(null); } });
   if(!blob) return null;
