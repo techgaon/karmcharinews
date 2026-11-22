@@ -25,8 +25,22 @@ jobs:
         run: |
           node <<'NODE'
           const fs=require("fs");
+          // Parse formatting only. Never execute pasted commands or print their content.
+          function normalize(name,input){
+            let value=String(input||'').trim();
+            if(name==='CLOUDFLARE_API_TOKEN'&&/^curl\s/.test(value)){
+              const urls=value.match(/https:\/\/[^\s"'\\]+/g)||[];
+              const tokens=[...value.matchAll(/Authorization:\s*Bearer\s+([A-Za-z0-9._~+\/-]+=*)/gi)];
+              if(urls.length!==1||urls[0]!=='https://api.cloudflare.com/client/v4/user/tokens/verify'||tokens.length!==1)
+                throw Error(name+' must contain the token or the single official Cloudflare verification example');
+              value=tokens[0][1];
+            }
+            if(!value||/[\u0000-\u0020\u007f]/.test(value))throw Error(name+' must contain only the copied value, without extra lines or labels');
+            return value;
+          }
+          
           for(const name of ["CLOUDFLARE_API_TOKEN","CLOUDFLARE_ACCOUNT_ID","GROQ_API_KEY"]){
-            const value=String(process.env[name]||"").trim();
+            const value=normalize(name,process.env[name]);
             if(!value||/[\u0000-\u0020\u007f]/.test(value))throw Error(name+" must contain only the copied value, without extra lines or labels");
             console.log("::add-mask::"+value);
             fs.appendFileSync(process.env.GITHUB_ENV,name+"="+value+String.fromCharCode(10));
