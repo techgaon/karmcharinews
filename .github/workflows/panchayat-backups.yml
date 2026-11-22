@@ -59,7 +59,15 @@ jobs:
           fi
       - name: Verify deployed backup configuration
         run: |
-          curl --fail --silent --show-error --retry 3 --retry-delay 5 https://panchayat-ai-fallback.surajbhanpandey853.workers.dev/panchayatai/api/ai-health | node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const j=JSON.parse(s);if(j.status!=="online"||j.configured.cloudflare!==true||j.configured.groq!==true)process.exit(1);console.log("Cloudflare backup online; Groq configured: "+j.configured.groq)})'
+          verified=no
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if curl --fail --silent --show-error --retry 3 --retry-delay 5 https://panchayat-ai-fallback.surajbhanpandey853.workers.dev/panchayatai/api/ai-health | node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const j=JSON.parse(s);if(j.status!=="online"||j.configured.cloudflare!==true||j.configured.groq!==true)process.exit(1);console.log("Cloudflare backup online; Groq configured: "+j.configured.groq)})'; then
+              verified=yes
+              break
+            fi
+            sleep 3
+          done
+          test "$verified" = yes
       - name: Verify both live AI providers with a harmless JSON prompt
         run: |
           node <<'NODE'
@@ -70,7 +78,7 @@ jobs:
             const g=await groq.json();if(JSON.parse(g.choices?.[0]?.message?.content||"{}").ok!==true)throw Error("Groq verification failed");
             const cf=await fetch("https://api.cloudflare.com/client/v4/accounts/"+process.env.CLOUDFLARE_ACCOUNT_ID+"/ai/run/@cf/meta/llama-3.1-8b-instruct-fp8-fast",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+process.env.CLOUDFLARE_API_TOKEN},body:JSON.stringify({messages,max_tokens:128,response_format:{type:"json_object"}}),signal:AbortSignal.timeout(30000)});
             if(!cf.ok)throw Error("Cloudflare AI provider verification HTTP "+cf.status);
-            const c=await cf.json();if(!c.success||JSON.parse(c.result?.response||"{}").ok!==true)throw Error("Cloudflare AI verification failed");
+            const c=await cf.json();if(!c.success||(typeof c.result?.response==="object"?c.result.response:JSON.parse(c.result?.response||"{}")).ok!==true)throw Error("Cloudflare AI verification failed");
             console.log("Groq and Cloudflare live JSON generation verified. No user documents were used.");
           })().catch(e=>{console.error(e.message);process.exit(1)});
           NODE
