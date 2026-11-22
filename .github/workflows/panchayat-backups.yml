@@ -1,9 +1,6 @@
 name: Deploy Panchayat AI backups with existing account secrets
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/panchayat-backups.yml']
 permissions:
   contents: read
 jobs:
@@ -14,27 +11,27 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: techgaon/techgaon.github.io
-          ref: e926d9c61b42758e1986aee16a722a7344bc4148
+          ref: c51cfb490d3c76d57b728f9afb1cba5ea3cc0191
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - name: Validate backup switching
-        run: node --test panchayatai/ai-fallback-worker/test/*.test.mjs
+        run: node --test panchayatai/ai-fallback-worker/test/*.test.*
       - name: Verify existing account configuration
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.PANCHAYAT_CLOUDFLARE_DEPLOY_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::Add a dedicated PANCHAYAT_CLOUDFLARE_DEPLOY_TOKEN with Workers Scripts Edit for the verified Free account."; exit 1; }
           test "$CLOUDFLARE_ACCOUNT_ID" = fc14ce3ea45e9966cc8933371cecc0ad
       - name: Deploy only the reviewed fallback Worker
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.PANCHAYAT_CLOUDFLARE_DEPLOY_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx --yes wrangler@4 deploy --config panchayatai/ai-fallback-worker/wrangler.toml
       - name: Configure Groq if a private key is present
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.PANCHAYAT_CLOUDFLARE_DEPLOY_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
