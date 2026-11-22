@@ -7,6 +7,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.PANCHAYAT_CLOUDFLARE_DEPLOY_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -17,27 +21,42 @@ jobs:
           node-version: '22'
       - name: Validate backup switching
         run: node --test panchayatai/ai-fallback-worker/test/*.test.*
+      - name: Normalize copied secrets without printing them
+        run: |
+          node <<'NODE'
+          const fs=require("fs");
+          for(const name of ["CLOUDFLARE_API_TOKEN","CLOUDFLARE_ACCOUNT_ID","GROQ_API_KEY"]){
+            const value=String(process.env[name]||"").trim();
+            if(!value||/[\u0000-\u0020\u007f]/.test(value))throw Error(name+" must contain only the copied value, without extra lines or labels");
+            console.log("::add-mask::"+value);
+            fs.appendFileSync(process.env.GITHUB_ENV,name+"="+value+String.fromCharCode(10));
+          }
+          NODE
       - name: Verify existing account configuration
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.PANCHAYAT_CLOUDFLARE_DEPLOY_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::Add a dedicated PANCHAYAT_CLOUDFLARE_DEPLOY_TOKEN with Workers Scripts Edit for the verified Free account."; exit 1; }
           test "$CLOUDFLARE_ACCOUNT_ID" = fc14ce3ea45e9966cc8933371cecc0ad
       - name: Deploy only the reviewed fallback Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.PANCHAYAT_CLOUDFLARE_DEPLOY_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx --yes wrangler@4 deploy --config panchayatai/ai-fallback-worker/wrangler.toml
       - name: Configure Groq if a private key is present
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.PANCHAYAT_CLOUDFLARE_DEPLOY_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           if [ -n "$GROQ_API_KEY" ]; then
             printf '%s' "$GROQ_API_KEY" | npx --yes wrangler@4 secret put GROQ_API_KEY --config panchayatai/ai-fallback-worker/wrangler.toml
           fi
       - name: Verify deployed backup configuration
         run: |
-          curl --fail --silent --show-error --retry 3 --retry-delay 5 https://panchayat-ai-fallback.surajbhanpandey853.workers.dev/panchayatai/api/ai-health | node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const j=JSON.parse(s);if(j.status!=="online"||j.configured.cloudflare!==true)process.exit(1);console.log("Cloudflare backup online; Groq configured: "+j.configured.groq)})'
+          curl --fail --silent --show-error --retry 3 --retry-delay 5 https://panchayat-ai-fallback.surajbhanpandey853.workers.dev/panchayatai/api/ai-health | node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const j=JSON.parse(s);if(j.status!=="online"||j.configured.cloudflare!==true||j.configured.groq!==true)process.exit(1);console.log("Cloudflare backup online; Groq configured: "+j.configured.groq)})'
+      - name: Verify both live AI providers with a harmless JSON prompt
+        run: |
+          node <<'NODE'
+          (async()=>{
+            const messages=[{role:"system",content:"Return only JSON."},{role:"user",content:'Return {"ok":true}.'}];
+            const groq=await fetch("https://api.groq.com/openai/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+process.env.GROQ_API_KEY},body:JSON.stringify({model:"openai/gpt-oss-20b",messages,max_completion_tokens:128,response_format:{type:"json_object"}}),signal:AbortSignal.timeout(30000)});
+            if(!groq.ok)throw Error("Groq provider verification HTTP "+groq.status);
+            const g=await groq.json();if(JSON.parse(g.choices?.[0]?.message?.content||"{}").ok!==true)throw Error("Groq verification failed");
+            const cf=await fetch("https://api.cloudflare.com/client/v4/accounts/"+process.env.CLOUDFLARE_ACCOUNT_ID+"/ai/run/@cf/meta/llama-3.1-8b-instruct-fp8-fast",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+process.env.CLOUDFLARE_API_TOKEN},body:JSON.stringify({messages,max_tokens:128,response_format:{type:"json_object"}}),signal:AbortSignal.timeout(30000)});
+            if(!cf.ok)throw Error("Cloudflare AI provider verification HTTP "+cf.status);
+            const c=await cf.json();if(!c.success||JSON.parse(c.result?.response||"{}").ok!==true)throw Error("Cloudflare AI verification failed");
+            console.log("Groq and Cloudflare live JSON generation verified. No user documents were used.");
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
