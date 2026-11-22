@@ -1,0 +1,53 @@
+name: Check Panchayat Cloudflare AI
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/panchayat-cloudflare-check.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      RAW_TOKEN: ${{ secrets.PANCHAYAT_CLOUDFLARE_DEPLOY_TOKEN }}
+      ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Inspect Cloudflare inference errors with synthetic input only
+        run: |
+          node <<'NODE'
+          // Parse formatting only. Never execute pasted commands or print their content.
+          function normalize(name,input){
+            let value=String(input||'').trim();
+            if(name==='CLOUDFLARE_API_TOKEN'&&/^curl\s/.test(value)){
+              const urls=value.match(/https:\/\/[^\s"'\\]+/g)||[];
+              const tokens=[...value.matchAll(/Authorization:\s*Bearer\s+([A-Za-z0-9._~+\/-]+=*)/gi)];
+              if(urls.length!==1||urls[0]!=='https://api.cloudflare.com/client/v4/user/tokens/verify'||tokens.length!==1)
+                throw Error(name+' must contain the token or the single official Cloudflare verification example');
+              value=tokens[0][1];
+            }
+            if(!value||/[\u0000-\u0020\u007f]/.test(value))throw Error(name+' must contain only the copied value, without extra lines or labels');
+            return value;
+          }
+          
+          (async()=>{
+            const token=normalize("CLOUDFLARE_API_TOKEN",process.env.RAW_TOKEN);
+            console.log("::add-mask::"+token);
+            const account=String(process.env.ACCOUNT_ID||"").trim();
+            if(account!=="fc14ce3ea45e9966cc8933371cecc0ad")throw Error("Wrong account");
+            for(const model of ["@cf/meta/llama-3.1-8b-instruct-fp8-fast","@cf/meta/llama-3.3-70b-instruct-fp8-fast"]){
+              const r=await fetch("https://api.cloudflare.com/client/v4/accounts/"+account+"/ai/run/"+model,{
+                method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token},
+                body:JSON.stringify({messages:[{role:"user",content:"Reply with OK only."}],max_tokens:32}),
+                signal:AbortSignal.timeout(30000)
+              });
+              const body=await r.json().catch(()=>({}));
+              const errors=(body.errors||[]).map(e=>({code:e.code,message:String(e.message||"").replaceAll(token,"[redacted]").slice(0,700)}));
+              console.log(JSON.stringify({model,status:r.status,success:body.success,errors,responseType:typeof body.result?.response,reply:r.ok?String(body.result?.response||"").slice(0,60):undefined}));
+            }
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
