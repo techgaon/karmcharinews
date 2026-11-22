@@ -1,6 +1,9 @@
 name: Deploy Panchayat AI backups with existing account secrets
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/panchayat-backups.yml']
 permissions:
   contents: read
 jobs:
@@ -15,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: techgaon/techgaon.github.io
-          ref: c51cfb490d3c76d57b728f9afb1cba5ea3cc0191
+          ref: cc4209776caa7c063d5df09e9d04a83f3f956c47
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -76,7 +79,26 @@ jobs:
             const groq=await fetch("https://api.groq.com/openai/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+process.env.GROQ_API_KEY},body:JSON.stringify({model:"openai/gpt-oss-20b",messages,max_completion_tokens:128,response_format:{type:"json_object"}}),signal:AbortSignal.timeout(30000)});
             if(!groq.ok)throw Error("Groq provider verification HTTP "+groq.status);
             const g=await groq.json();if(JSON.parse(g.choices?.[0]?.message?.content||"{}").ok!==true)throw Error("Groq verification failed");
+            console.log("Groq live JSON generation verified.");
+            const {request,render}=await import("./panchayatai/drafting-core.mjs");
+            const input={kind:"पत्र",gp:"परीक्षण",profile:{role:"gpa",nameHindi:"परीक्षण सचिव",gps:["परीक्षण"],districtHindi:"बाराबंकी",blockHindi:"हैदरगढ़"},points:"सफाई कर्मी को ग्राम पंचायत की नियमित सफाई के संबंध में सामान्य पत्र बनाएं। किसी शिकायत, निरीक्षण, दंड, राशि, तारीख या समय सीमा का उल्लेख न करें।"};
+            const prepared=request(input);
+            const draft=await fetch("https://api.groq.com/openai/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+process.env.GROQ_API_KEY},body:JSON.stringify({model:"openai/gpt-oss-20b",messages:[{role:"system",content:prepared.system},{role:"user",content:prepared.prompt}],max_completion_tokens:1800,response_format:{type:"json_object"}}),signal:AbortSignal.timeout(30000)});
+            if(!draft.ok)throw Error("Groq real draft HTTP "+draft.status);
+            const output=await draft.json(),data=JSON.parse(output.choices?.[0]?.message?.content||"{}");
+            data.evidence=(Array.isArray(data.evidence)?data.evidence:[]).filter(x=>x&&typeof x.quote==="string"&&input.points.includes(x.quote));
+            data.copies=(Array.isArray(data.copies)?data.copies:[]).filter(x=>typeof x==="string"&&input.points.includes(x));
+            const letter=render(data,input);
+            if(!letter.html||!letter.html.includes("परीक्षण"))throw Error("Draft rendering failed");
+            console.log("Live Groq Hindi letter passed the app's drafting validation and rendering.");
             const cf=await fetch("https://api.cloudflare.com/client/v4/accounts/"+process.env.CLOUDFLARE_ACCOUNT_ID+"/ai/run/@cf/meta/llama-3.1-8b-instruct-fp8-fast",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+process.env.CLOUDFLARE_API_TOKEN},body:JSON.stringify({messages,max_tokens:128,response_format:{type:"json_object"}}),signal:AbortSignal.timeout(30000)});
+            if(cf.status===429){
+              const failure=await cf.json().catch(()=>({}));
+              const message=(failure.errors||[]).map(e=>String(e.message||"")).join(" ").toLowerCase();
+              const reason=/daily|per day|neurons|allocation|quota/.test(message)?"daily_free_allocation":"rate_limit";
+              console.log("::warning::Cloudflare AI is configured but currently limited: "+reason+" (HTTP 429). Groq fallback is live.");
+              return;
+            }
             if(!cf.ok)throw Error("Cloudflare AI provider verification HTTP "+cf.status);
             const c=await cf.json();if(!c.success||(typeof c.result?.response==="object"?c.result.response:JSON.parse(c.result?.response||"{}")).ok!==true)throw Error("Cloudflare AI verification failed");
             console.log("Groq and Cloudflare live JSON generation verified. No user documents were used.");
