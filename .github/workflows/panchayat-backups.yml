@@ -1,9 +1,6 @@
 name: Deploy Panchayat AI backups with existing account secrets
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/panchayat-backups.yml']
 permissions:
   contents: read
 jobs:
